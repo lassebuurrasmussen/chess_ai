@@ -396,8 +396,29 @@ def print_pos(pos):
     print('    a b c d e f g h \n\n')
 
 
-def main():
-    hist = [Position(initial, 0, (True,True), (True,True), 0, 0)]
+def tree_search_move(searcher, hist, player, time_allowed=0.1):
+    # Fire up the engine to look for a move.
+    start = time.time()
+    for _depth, move, score in searcher.search(hist[-1], hist):
+        if time.time() - start > time_allowed:
+            break
+
+    if score == MATE_UPPER:
+        print("Checkmate!")
+
+    # The black player moves from a rotated position, so we have to
+    # 'back rotate' the move before printing it.
+    if player == 'p2':
+        words_spoken = "My move:"
+    elif player == 'p1':
+        words_spoken = "Your move:"
+
+    print(words_spoken, render(119 - move[0]) + render(119 - move[1]))
+    hist.append(hist[-1].move(move))
+
+
+def main(human_player1):
+    hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
     searcher = Searcher()
     while True:
         print_pos(hist[-1])
@@ -406,16 +427,20 @@ def main():
             print("You lost")
             break
 
-        # We query the user until she enters a (pseudo) legal move.
-        move = None
-        while move not in hist[-1].gen_moves():
-            match = re.match('([a-h][1-8])'*2, input('Your move: '))
-            if match:
-                move = parse(match.group(1)), parse(match.group(2))
-            else:
-                # Inform the user when invalid input (e.g. "help") is entered
-                print("Please enter a move like g8f6")
-        hist.append(hist[-1].move(move))
+        if human_player1:
+            # We query the user until she enters a (pseudo) legal move.
+            move = None
+            while move not in hist[-1].gen_moves():
+                match = re.match('([a-h][1-8])' * 2, input('Your move: '))
+                if match:
+                    move = parse(match.group(1)), parse(match.group(2))
+                else:
+                    # Inform the user when invalid input (e.g. "help") is entered
+                    print("Please enter a move like g8f6")
+            hist.append(hist[-1].move(move))
+
+        else:
+            tree_search_move(searcher=searcher, hist=hist, player='p1', time_allowed=1)
 
         # After our move we rotate the board and print it again.
         # This allows us to see the effect of our move.
@@ -425,21 +450,8 @@ def main():
             print("You won")
             break
 
-        # Fire up the engine to look for a move.
-        start = time.time()
-        for _depth, move, score in searcher.search(hist[-1], hist):
-            if time.time() - start > 1:
-                break
-
-        if score == MATE_UPPER:
-            print("Checkmate!")
-
-        # The black player moves from a rotated position, so we have to
-        # 'back rotate' the move before printing it.
-        print("My move:", render(119-move[0]) + render(119-move[1]))
-        hist.append(hist[-1].move(move))
+        tree_search_move(searcher=searcher, hist=hist, player='p2')
 
 
 if __name__ == '__main__':
-    main()
-
+    main(human_player1=True)
