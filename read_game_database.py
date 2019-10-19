@@ -11,6 +11,8 @@ INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
 
 
 def white_to_black(a, single_state=False):
+    """Takes an input state array and swaps the 6 first matrices with the 6 last matrices. This has
+    the effect of seeing the white pieces as black and vice versa."""
     a = a.copy()
 
     n_pieces = len(a) if single_state else len(a[0])
@@ -28,6 +30,7 @@ def white_to_black(a, single_state=False):
 
 
 def mirror_state(a, single_state=False):
+    """Takes a state from perspective of white and outputs perspective black and vice versa"""
     a = white_to_black(a, single_state=single_state)
 
     if single_state:
