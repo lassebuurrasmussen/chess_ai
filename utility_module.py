@@ -1,3 +1,4 @@
+import chess
 import numpy as np
 import re
 
@@ -15,7 +16,7 @@ def count_games_from_pgn(input_file):
     return len(re.findall("EventDate", file))
 
 
-def board_2_array(in_board):
+def board_2_array(in_board: chess.Board):
     """Function adapted from chess.Board.__str__() to generate a numpy array representing the board
     state"""
     builder = np.zeros([12, 8 * 8])
@@ -27,4 +28,5 @@ def board_2_array(in_board):
             piece_int = PIECE_INT_LOOKUP[piece.symbol()]
             builder[piece_int, square] = 1
 
-    return builder.reshape([12, 8, 8])
+    builder = builder.reshape([12, 8, 8])
+    return np.flip(builder, 1)  # Not sure why, but I need to flip for it to match
