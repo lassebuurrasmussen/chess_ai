@@ -1,3 +1,5 @@
+from itertools import permutations, repeat
+
 import chess
 import numpy as np
 import re
@@ -5,8 +7,23 @@ import re
 from chess import SQUARES_180
 
 PIECES_WHITE = ['P', 'R', 'N', 'B', 'Q', 'K']
+
 PIECES_BLACK = list("".join(PIECES_WHITE).lower())
+
 PIECE_INT_LOOKUP = {p: i for i, p in enumerate(PIECES_WHITE + PIECES_BLACK)}
+
+POSITION_LOOKUP = [[0, 1, 2, 3, 4, 5, 6, 7],
+                   [8, 9, 10, 11, 12, 13, 14, 15],
+                   [16, 17, 18, 19, 20, 21, 22, 23],
+                   [24, 25, 26, 27, 28, 29, 30, 31],
+                   [32, 33, 34, 35, 36, 37, 38, 39],
+                   [40, 41, 42, 43, 44, 45, 46, 47],
+                   [48, 49, 50, 51, 52, 53, 54, 55],
+                   [56, 57, 58, 59, 60, 61, 62, 63]]
+
+UCI_LETTER_LOOKUP = {97: '0', 98: '1', 99: '2', 100: '3', 101: '4', 102: '5', 103: '6', 104: '7'}
+
+ALL_MOVES_1D = list(permutations(range(8 * 8), r=2))
 
 
 def count_games_from_pgn(input_file):
@@ -16,7 +33,7 @@ def count_games_from_pgn(input_file):
     return len(re.findall("EventDate", file))
 
 
-def board_2_array(in_board: chess.Board):
+def get_board_state(in_board: chess.Board):
     """Function adapted from chess.Board.__str__() to generate a numpy array representing the board
     state"""
     builder = np.zeros([12, 8 * 8])
@@ -61,3 +78,40 @@ def mirror_state(a, single_state=False):
         return np.flip(a, axis=1)
     else:
         return np.flip(a, axis=2)
+
+
+def coordinates_to_onehot_index(entry):
+    """Don't ask me why this works. Makes my head explode. But it's much faster than calling .index
+    method on list.
+
+    Can be tested with:
+    assert all([coordinates_to_onehot_index(entry) == i for i, entry in enumerate(one_hot)])"""
+    # return (entry[0] - 1) * 63 + entry[1] - 2 + int(entry[0] > entry[1])
+    return (entry[0]) * 63 + entry[1] - 1 + int(entry[0] > entry[1])
+
+
+def uci2onehot(uci: str):
+    """Takes UCI move str and converts it to a onehot vector"""
+    # Translate UCI move to integers
+    move_translated = uci.translate(UCI_LETTER_LOOKUP)
+
+    # Extract source and destination coordinates
+    src, dest = ((move_translated[1], move_translated[0]),
+                 (move_translated[3], move_translated[2]))
+    src, dest = [list(map(int, coord)) for coord in [src, dest]]
+
+    # Subtract each row index from 8 as UCI counts last row as first
+    src[0] = 8 - src[0]
+    dest[0] = 8 - dest[0]
+
+    # Convert 2D coordinates to 1D coordinates
+    src_int = POSITION_LOOKUP[src[0]][src[1]]
+    dest_int = POSITION_LOOKUP[dest[0]][dest[1]]
+
+    # Find index of source and destination in 1d move vector
+    hot = coordinates_to_onehot_index((src_int, dest_int))
+    onehot = list(repeat(0, len(ALL_MOVES_1D)))
+
+    onehot[hot] = 1
+
+    return onehot

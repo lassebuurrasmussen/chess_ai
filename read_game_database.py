@@ -6,27 +6,48 @@ from chess import pgn, Board
 from scipy import sparse
 from tqdm import tqdm
 
-from utility_module import board_2_array, count_games_from_pgn, mirror_state
+from utility_module import get_board_state, count_games_from_pgn, mirror_state, uci2onehot
 
 INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
 
 
-def get_single_games_states(game):
+def get_state_legal_moves(board):
+    """Go through all the legal moves of the current board state and return a list of onehot
+    vectors"""
+    state_legal_moves = []
+    for legal_move in board.legal_moves:
+        uci = legal_move.uci()
+        state_legal_moves.append(uci2onehot(uci=uci))
+
+    return state_legal_moves
+
+
+def get_single_games_states(game, return_legal_moves=False):
     """Create new chess.Board instance and plays game till the end. Returns list of array of all
-    states along the way"""
+    states along the way.
+    Can also return list of legal moves per state"""
     board = Board()
-    states = []
+    game_states = []
+    game_legal_moves = []
     for move in game.mainline_moves():
-        state = board_2_array(board)
-        states.append(state)
+        state = get_board_state(board)
+
+        if return_legal_moves:
+            state_legal_moves = get_state_legal_moves(board=board)
+            game_legal_moves.append(state_legal_moves)
+
+        game_states.append(state)
 
         board.push(move)
 
     # Get last state
-    state = board_2_array(board)
-    states.append(state)
+    state = get_board_state(board)
+    game_states.append(state)
 
-    return states
+    if return_legal_moves:
+        return game_states, game_legal_moves
+    else:
+        return game_states
 
 
 def get_all_games_states(pgn_file, games_to_get, separate_by_game):
