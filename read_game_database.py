@@ -1,45 +1,50 @@
-import numpy as np
-from chess import pgn, Board
-from tqdm import tqdm
-from scipy import sparse
-import joblib
 import pathlib
 
-from utility_module import board_2_array, count_games_from_pgn
+import joblib
+import numpy as np
+from chess import pgn, Board
+from scipy import sparse
+from tqdm import tqdm
+
+from utility_module import board_2_array, count_games_from_pgn, mirror_state
 
 INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
 
 
-def white_to_black(a, single_state=False):
-    """Takes an input state array and swaps the 6 first matrices with the 6 last matrices. This has
-    the effect of seeing the white pieces as black and vice versa."""
-    a = a.copy()
+def get_single_games_states(game):
+    board = Board()
+    states = []
+    for move in game.mainline_moves():
+        state = board_2_array(board)
+        states.append(state)
 
-    n_pieces = len(a) if single_state else len(a[0])
-    n_white_pieces = n_pieces // 2
+        board.push(move)
 
-    normal_order = list(range(n_pieces))
-    new_order = list(range(n_white_pieces, n_pieces)) + list(range(n_white_pieces))
+    # Get last state
+    state = board_2_array(board)
+    states.append(state)
 
-    if single_state:
-        a[normal_order] = a[new_order]
-    else:
-        a[:, normal_order] = a[:, new_order]
-
-    return a
+    return states
 
 
-def mirror_state(a, single_state=False):
-    """Takes a state from perspective of white and outputs perspective black and vice versa"""
-    a = white_to_black(a, single_state=single_state)
+def get_all_games_states(pgn_file, games_to_get, separate_by_game):
+    all_states = []
+    for _ in tqdm(range(games_to_get)):
+        game = pgn.read_game(pgn_file)
+        assert not game.errors
 
-    if single_state:
-        return np.flip(a, axis=1)
-    else:
-        return np.flip(a, axis=2)
+        game_states = get_single_games_states(game=game)
+
+        if separate_by_game:
+            game_states = np.array(game_states)
+            all_states.append(game_states)
+        else:
+            all_states.extend(game_states)
+
+    return all_states
 
 
-def get_states_from_pgn(input_file, games_to_get=None):
+def get_states_from_pgn(input_file, games_to_get=None, separate_by_game=True):
     # Encoding -> https://python-chess.readthedocs.io/en/latest/pgn.html
     n_games = count_games_from_pgn(input_file=input_file)
     pgn_file = open(input_file, encoding="utf-8-sig")
@@ -47,28 +52,20 @@ def get_states_from_pgn(input_file, games_to_get=None):
     if games_to_get is None:
         games_to_get = n_games
 
-    states = []
-    for _ in tqdm(range(games_to_get)):
-
-        game = pgn.read_game(pgn_file)
-        assert not game.errors
-
-        board = Board()
-        for move in game.mainline_moves():
-            state = board_2_array(board)
-            states.append(state)
-
-            board.push(move)
-
-        state = board_2_array(board)
-        states.append(state)
+    all_states = get_all_games_states(pgn_file=pgn_file, games_to_get=games_to_get,
+                                      separate_by_game=separate_by_game)
 
     pgn_file.close()
 
-    return np.array(states)
+    if separate_by_game:
+        return all_states
+    else:
+        return np.array(all_states)
 
 
-states = get_states_from_pgn(INPUT_FILE_PATH, games_to_get=100)
+states = get_states_from_pgn(INPUT_FILE_PATH, games_to_get=100, separate_by_game=False)
+#%%
+
 
 input_ixs = list(range(len(states) - 1))
 output_ixs = list(range(1, len(states)))
