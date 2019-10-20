@@ -32,3 +32,21 @@ I think DeepMind's AlphaGo has two nets. One to estimate the policy and one to e
 #####Next steps:
 1. Reformat the PGN format to shape (12, 8, 8) arrays input and output for both white and black
 2. Think about what the value net would look like
+
+_Oct 20 - 19_
+
+I managed to make some relatively fast code that can extract input arrays from the Board object of `python-chess`. It also converts the black moves into white moves. 
+
+I've looked a bit at AlphaGo, which is the one that uses two nets. It's not completely clear to me exactly what features they feed into the policy learning algorithm. But maybe I should just try coming up with my own method.
+
+I've had the idea of first training a network to learn the legal moves of any given board position. I can then extract the embeddings from its hidden layer and use that to embed the board before I input it into the policy network. This is heavily inspired by Word2Vec [[1]](https://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf) [[2]](https://arxiv.org/abs/1301.3781).\
+I will probably need to compare the effect of this embedding to just inputting the plain state array to the policy network.
+
+I would really like for my policy network to output a probability over the moves. But how do I achieve that? I can make it a classification task where the output is a 589056 long one-hot vector (permutations of size 2 from 12 * 8 * 8 fields). Then I would get probabilities. I can't really figure out if that is better than getting an output array with shape (12, 8, 8). Because this would only output a single move. And what if that move is not legal? I think I'll just have to try.
+
+#####Next steps:
+1. Get input arrays for legal moves network from a subset of games
+2. Get corresponding output as one-hot vector of legal moves
+3. Train a network to predict legal moves.
+4. Extract embeddings from legal moves network
+5. Think about what the value net would look like
