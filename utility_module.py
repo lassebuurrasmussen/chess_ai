@@ -1,12 +1,11 @@
-from itertools import permutations, repeat
+import re
+from itertools import permutations
 
 import chess
 import numpy as np
-import re
-
 from chess import SQUARES_180
 
-from useful_objects import ONEHOT_TEMPLATE
+from useful_objects import ONEHOT_TEMPLATE_ARRAY
 
 PIECES_WHITE = ['P', 'R', 'N', 'B', 'Q', 'K']
 
@@ -112,7 +111,8 @@ def uci2onehot(uci: str):
 
     # Find index of source and destination in 1d move vector
     hot = coordinates_to_onehot_index((src_int, dest_int))
-    onehot = ONEHOT_TEMPLATE.copy()
+    # onehot = ONEHOT_TEMPLATE.copy()
+    onehot = ONEHOT_TEMPLATE_ARRAY.copy()
 
     onehot[hot] = 1
 

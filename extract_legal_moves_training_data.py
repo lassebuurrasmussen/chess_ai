@@ -51,12 +51,17 @@ def get_single_games_states(game, return_legal_moves):
 def get_all_games_states(pgn_file, games_to_get, separate_by_game, return_legal_moves):
     """Extracts the either a long list of all states from the pgn file or a list for each game with
     a list of states"""
-    all_states = []
+    all_states, all_legal_moves = [], []
     for _ in tqdm(range(games_to_get)):
         game = pgn.read_game(pgn_file)
         assert not game.errors
 
         game_states = get_single_games_states(game=game, return_legal_moves=return_legal_moves)
+
+        if return_legal_moves:
+            game_states, game_legal_moves = game_states
+            # game_legal_moves = np.array(game_legal_moves)
+            all_legal_moves.append(game_legal_moves)
 
         if separate_by_game:
             game_states = np.array(game_states)
@@ -64,7 +69,10 @@ def get_all_games_states(pgn_file, games_to_get, separate_by_game, return_legal_
         else:
             all_states.extend(game_states)
 
-    return all_states
+    if return_legal_moves:
+        return all_states, all_legal_moves
+    else:
+        return all_states
 
 
 def get_states_from_pgn(input_file, n_games_to_get=None, separate_by_game=True,
@@ -78,17 +86,53 @@ def get_states_from_pgn(input_file, n_games_to_get=None, separate_by_game=True,
     if n_games_to_get is None:
         n_games_to_get = n_games
 
+    all_legal_moves = None
     all_states = get_all_games_states(pgn_file=pgn_file, games_to_get=n_games_to_get,
                                       separate_by_game=separate_by_game,
                                       return_legal_moves=return_legal_moves)
 
+    if return_legal_moves:
+        all_states, all_legal_moves = all_states
+
     pgn_file.close()
 
-    if separate_by_game:
-        return all_states
+    if not separate_by_game:
+        all_states = np.array(all_states)
+
+    if return_legal_moves:
+        return all_states, all_legal_moves
     else:
-        return np.array(all_states)
+        return all_states
 
 
-get_states_from_pgn(input_file=INPUT_FILE_PATH, n_games_to_get=10, separate_by_game=True,
-                    return_legal_moves=True)
+states, legal_moves = get_states_from_pgn(input_file=INPUT_FILE_PATH, n_games_to_get=25,
+                                          separate_by_game=True,
+                                          return_legal_moves=True)
+
+n_games = len(states)
+n_games_val = n_games // 20
+
+
+def preprocess_legal_move_data(all_states, all_legal_moves):
+    out_data_x = []
+    out_data_y = []
+    for game_states, game_legal_moves in tqdm(list(zip(all_states, all_legal_moves))):
+
+        for state, state_legal_moves in zip(game_states, game_legal_moves):
+
+            for legal_move in state_legal_moves:
+                out_data_x.append(state)
+                out_data_y.append(legal_move)
+
+    return np.array(out_data_x), np.array(out_data_y)
+
+
+assert n_games_val > 0
+legal_moves_train = preprocess_legal_move_data(all_states=states[:-n_games_val],
+                                               all_legal_moves=legal_moves[:-n_games_val])
+legal_moves_val = preprocess_legal_move_data(all_states=states[-n_games_val:],
+                                             all_legal_moves=legal_moves[-n_games_val:])
+
+# legal_moves_train is now a tuple with input array shape (None, 12, 8, 8) and output array
+# (None, 4032) where None is identical in the two cases and corresponds to total number of states
+# times mean number of legal moves for each state
