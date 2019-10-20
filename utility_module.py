@@ -30,3 +30,32 @@ def board_2_array(in_board: chess.Board):
 
     builder = builder.reshape([12, 8, 8])
     return np.flip(builder, 1)  # Not sure why, but I need to flip for it to match
+
+
+def white_to_black(a, single_state=False):
+    """Takes an input state array and swaps the 6 first matrices with the 6 last matrices. This has
+    the effect of seeing the white pieces as black and vice versa."""
+    a = a.copy()
+
+    n_pieces = len(a) if single_state else len(a[0])
+    n_white_pieces = n_pieces // 2
+
+    normal_order = list(range(n_pieces))
+    new_order = list(range(n_white_pieces, n_pieces)) + list(range(n_white_pieces))
+
+    if single_state:
+        a[normal_order] = a[new_order]
+    else:
+        a[:, normal_order] = a[:, new_order]
+
+    return a
+
+
+def mirror_state(a, single_state=False):
+    """Takes a state from perspective of white and outputs perspective black and vice versa"""
+    a = white_to_black(a, single_state=single_state)
+
+    if single_state:
+        return np.flip(a, axis=1)
+    else:
+        return np.flip(a, axis=2)
