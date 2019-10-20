@@ -6,6 +6,8 @@ import re
 
 from chess import SQUARES_180
 
+from useful_objects import ONEHOT_TEMPLATE
+
 PIECES_WHITE = ['P', 'R', 'N', 'B', 'Q', 'K']
 
 PIECES_BLACK = list("".join(PIECES_WHITE).lower())
@@ -98,7 +100,7 @@ def uci2onehot(uci: str):
     # Extract source and destination coordinates
     src, dest = ((move_translated[1], move_translated[0]),
                  (move_translated[3], move_translated[2]))
-    src, dest = [list(map(int, coord)) for coord in [src, dest]]
+    src, dest = [int(src[0]), int(src[1])], [int(dest[0]), int(dest[1])]
 
     # Subtract each row index from 8 as UCI counts last row as first
     src[0] = 8 - src[0]
@@ -110,7 +112,7 @@ def uci2onehot(uci: str):
 
     # Find index of source and destination in 1d move vector
     hot = coordinates_to_onehot_index((src_int, dest_int))
-    onehot = list(repeat(0, len(ALL_MOVES_1D)))
+    onehot = ONEHOT_TEMPLATE.copy()
 
     onehot[hot] = 1
 
