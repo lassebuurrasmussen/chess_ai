@@ -12,6 +12,8 @@ INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
 
 
 def get_single_games_states(game):
+    """Create new chess.Board instance and plays game till the end. Returns list of array of all
+    states along the way"""
     board = Board()
     states = []
     for move in game.mainline_moves():
@@ -28,6 +30,8 @@ def get_single_games_states(game):
 
 
 def get_all_games_states(pgn_file, games_to_get, separate_by_game):
+    """Extracts the either a long list of all states from the pgn file or a list for each game with
+    a list of states"""
     all_states = []
     for _ in tqdm(range(games_to_get)):
         game = pgn.read_game(pgn_file)
@@ -45,6 +49,8 @@ def get_all_games_states(pgn_file, games_to_get, separate_by_game):
 
 
 def get_states_from_pgn(input_file, games_to_get=None, separate_by_game=True):
+    """Opens specified input pgn file and extracts all states from all games. Returns either a long
+    array of all states from the pgn file or a list with an array for each game."""
     # Encoding -> https://python-chess.readthedocs.io/en/latest/pgn.html
     n_games = count_games_from_pgn(input_file=input_file)
     pgn_file = open(input_file, encoding="utf-8-sig")
@@ -63,7 +69,7 @@ def get_states_from_pgn(input_file, games_to_get=None, separate_by_game=True):
         return np.array(all_states)
 
 
-states = get_states_from_pgn(INPUT_FILE_PATH, games_to_get=100, separate_by_game=False)
+states = get_states_from_pgn(INPUT_FILE_PATH, games_to_get=100, separate_by_game=True)
 #%%
 
 
