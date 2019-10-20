@@ -29,7 +29,9 @@ def board_2_array(in_board: chess.Board):
             builder[piece_int, square] = 1
 
     builder = builder.reshape([12, 8, 8])
-    return np.flip(builder, 1)  # Not sure why, but I need to flip for it to match
+
+    # As the SQUARES_180 is flipped I need to flip it back
+    return np.flip(builder, 1)
 
 
 def white_to_black(a, single_state=False):
