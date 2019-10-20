@@ -56,7 +56,7 @@ def get_all_games_states(pgn_file, games_to_get, separate_by_game, return_legal_
         game = pgn.read_game(pgn_file)
         assert not game.errors
 
-        game_states = get_single_games_states(game=game)
+        game_states = get_single_games_states(game=game, return_legal_moves=return_legal_moves)
 
         if separate_by_game:
             game_states = np.array(game_states)
@@ -79,7 +79,8 @@ def get_states_from_pgn(input_file, n_games_to_get=None, separate_by_game=True,
         n_games_to_get = n_games
 
     all_states = get_all_games_states(pgn_file=pgn_file, games_to_get=n_games_to_get,
-                                      separate_by_game=separate_by_game)
+                                      separate_by_game=separate_by_game,
+                                      return_legal_moves=return_legal_moves)
 
     pgn_file.close()
 
