@@ -8,6 +8,15 @@ from utility_module import get_board_state, count_games_from_pgn, uci2onehot
 
 INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
 
+# TODO Make sure that the legal moves data is rotated so that it's always from white's perspective
+#  I would also like to only have unique states in the legal moves training data
+
+# Todo - I need to find a better way to handle the data as I run out of ram this way. Maybe I should
+#  just have a function on top of the neural net that takes a simple representation
+#  (like FEN - call board.board_fen() to get), and then convertes to onehot representation.
+
+observed_states = set()
+
 
 def get_state_legal_moves(board):
     """Go through all the legal moves of the current board state and return a list of onehot
