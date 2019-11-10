@@ -7,6 +7,7 @@ import chess
 import numpy as np
 from chess import SQUARES_180
 
+# noinspection PyUnresolvedReferences
 from useful_objects import ONEHOT_TEMPLATE_ARRAY
 
 PIECES_WHITE = ['P', 'R', 'N', 'B', 'Q', 'K']
