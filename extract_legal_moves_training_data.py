@@ -154,10 +154,14 @@ assert len(states) == len(legal_moves)
 assert all([len(st) == len(leg) for st, leg in zip(states, legal_moves)])
 
 
-def preprocess_legal_move_data(all_states, all_legal_moves):
+#%%
+
+def preprocess_legal_move_data(games_states: List[np.ndarray], games_legal_moves: List[List[int]],
+                               ohe: OneHotEncoder) -> Tuple[np.ndarray, np.ndarray]:
+    """Extracts tuples with arrays of training points."""
     out_data_x = []
     out_data_y = []
-    for game_states, game_legal_moves in tqdm(list(zip(all_states, all_legal_moves))):
+    for game_states, game_legal_moves in tqdm(list(zip(games_states, games_legal_moves))):
 
         for state, state_legal_moves in zip(game_states, game_legal_moves):
 
@@ -165,15 +169,47 @@ def preprocess_legal_move_data(all_states, all_legal_moves):
                 out_data_x.append(state)
                 out_data_y.append(legal_move)
 
-    return np.array(out_data_x), np.array(out_data_y)
+    return np.array(out_data_x), (ohe.transform(np.array(out_data_y).reshape(-1, 1)))
 
 
-assert n_games_val > 0
-legal_moves_train = preprocess_legal_move_data(all_states=states[:-n_games_val],
-                                               all_legal_moves=legal_moves[:-n_games_val])
-legal_moves_val = preprocess_legal_move_data(all_states=states[-n_games_val:],
-                                             all_legal_moves=legal_moves[-n_games_val:])
+def fit_batches(all_states: List[np.ndarray], all_legal_moves: List[List[int]], batch_size: int,
+                frac_val_games: float = 0.05):
+    total_games = len(states)
+    n_games_val = int(total_games * frac_val_games)
+    random.seed(3947)
+    idx_val_games = random.sample(range(total_games), k=n_games_val)
+    idx_train_games = [i for i in range(total_games) if i not in idx_val_games]
 
-# legal_moves_train is now a tuple with input array shape (None, 12, 8, 8) and output array
-# (None, 4032) where None is identical in the two cases and corresponds to total number of states
-# times mean number of legal moves for each state
+    train_states = [all_states[i] for i in range(total_games) if i in idx_train_games]
+    train_legal_moves = [all_legal_moves[i] for i in range(total_games) if i in idx_train_games]
+
+    val_states = [all_states[i] for i in range(total_games) if i in idx_val_games]
+    val_legal_moves = [all_legal_moves[i] for i in range(total_games) if i in idx_val_games]
+
+    # Remember to use ohe to de-transform afterwards, as it is not certain to correspond to int
+    # values
+    n_moves = len(ALL_MOVES_1D)
+    ohe: OneHotEncoder = (OneHotEncoder(categories='auto', sparse=False)
+                          .fit(np.arange(n_moves).reshape(-1, 1)))
+
+    val_x, val_y = preprocess_legal_move_data(games_states=val_states,
+                                              games_legal_moves=val_legal_moves,
+                                              ohe=ohe)
+
+    idx_train_games_shuffled = random.sample(idx_train_games, len(idx_train_games))
+    for batch_i in range(0, len(idx_train_games), batch_size):
+        batch_idxs = idx_train_games_shuffled[batch_i:batch_i + batch_size]
+
+        batch_states = [train_states[i] for i in batch_idxs]
+        batch_legal_moves = [train_legal_moves[i] for i in batch_idxs]
+
+        batch_x, batch_y = preprocess_legal_move_data(games_states=batch_states,
+                                                      games_legal_moves=batch_legal_moves, ohe=ohe)
+
+        # Todo - implement Net
+        model = Net()
+        model.fit(x=batch_x, y=batch_y)
+        val_loss = model.test(x=val_x, y=val_y)
+
+
+fit_batches(all_states=states, all_legal_moves=legal_moves, batch_size=5)
