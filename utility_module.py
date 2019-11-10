@@ -1,5 +1,7 @@
 import re
 from itertools import permutations
+from os import PathLike
+from typing import Tuple
 
 import chess
 import numpy as np
@@ -27,14 +29,14 @@ UCI_LETTER_LOOKUP = {97: '0', 98: '1', 99: '2', 100: '3', 101: '4', 102: '5', 10
 ALL_MOVES_1D = list(permutations(range(8 * 8), r=2))
 
 
-def count_games_from_pgn(input_file):
+def count_games_from_pgn(input_file: PathLike) -> int:
     """Reads in PGN game file and counts the number of occurrences of 'EventDate'"""
     with open(input_file, encoding="latin") as f:
         file = f.read()
     return len(re.findall("EventDate", file))
 
 
-def get_board_state(in_board: chess.Board):
+def get_board_state(in_board: chess.Board) -> np.ndarray:
     """Function adapted from chess.Board.__str__() to generate a numpy array representing the board
     state"""
     builder = np.zeros([12, 8 * 8])
@@ -52,53 +54,56 @@ def get_board_state(in_board: chess.Board):
     return np.flip(builder, 1)
 
 
-def white_to_black(a, single_state=False):
+def white_to_black(in_state: np.ndarray, single_state: bool = False) -> np.ndarray:
     """Takes an input state array and swaps the 6 first matrices with the 6 last matrices. This has
     the effect of seeing the white pieces as black and vice versa."""
-    a = a.copy()
+    in_state = in_state.copy()
 
-    n_pieces = len(a) if single_state else len(a[0])
+    n_pieces = len(in_state) if single_state else len(in_state[0])
     n_white_pieces = n_pieces // 2
 
     normal_order = list(range(n_pieces))
     new_order = list(range(n_white_pieces, n_pieces)) + list(range(n_white_pieces))
 
     if single_state:
-        a[normal_order] = a[new_order]
+        in_state[normal_order] = in_state[new_order]
     else:
-        a[:, normal_order] = a[:, new_order]
+        in_state[:, normal_order] = in_state[:, new_order]
 
-    return a
+    return in_state
 
 
-def mirror_state(a, single_state=False):
+def mirror_state(in_state: np.ndarray, single_state=False) -> np.ndarray:
     """Takes a state from perspective of white and outputs perspective black and vice versa"""
-    a = white_to_black(a, single_state=single_state)
+    in_state = white_to_black(in_state, single_state=single_state)
 
     if single_state:
-        return np.flip(a, axis=1)
+        return np.flip(in_state, axis=1)
     else:
-        return np.flip(a, axis=2)
+        return np.flip(in_state, axis=2)
 
 
-def coordinates_to_onehot_index(entry):
+def coordinates_to_onehot_index(entry: Tuple[int, int]) -> int:
     """Don't ask me why this works. Makes my head explode. But it's much faster than calling .index
     method on list.
 
     Can be tested with:
     assert all([coordinates_to_onehot_index(entry) == i for i, entry in enumerate(one_hot)])"""
-    # return (entry[0] - 1) * 63 + entry[1] - 2 + int(entry[0] > entry[1])
     return (entry[0]) * 63 + entry[1] - 1 + int(entry[0] > entry[1])
 
 
-def uci2onehot(uci: str):
+def uci2onehot(uci: str) -> np.ndarray:
     """Takes UCI move str and converts it to a onehot vector"""
-    # Translate UCI move to integers
+    # Translate UCI move to integers e.g. 'g' is has unicode 103 and is the index 6 column on the
+    # board. So g -> 6
     move_translated = uci.translate(UCI_LETTER_LOOKUP)
 
     # Extract source and destination coordinates
+    # swap axes as UCI is column first instead of row first
     src, dest = ((move_translated[1], move_translated[0]),
                  (move_translated[3], move_translated[2]))
+
+    # Convert to ints
     src, dest = [int(src[0]), int(src[1])], [int(dest[0]), int(dest[1])]
 
     # Subtract each row index from 8 as UCI counts last row as first
@@ -111,7 +116,6 @@ def uci2onehot(uci: str):
 
     # Find index of source and destination in 1d move vector
     hot = coordinates_to_onehot_index((src_int, dest_int))
-    # onehot = ONEHOT_TEMPLATE.copy()
     onehot = ONEHOT_TEMPLATE_ARRAY.copy()
 
     onehot[hot] = 1

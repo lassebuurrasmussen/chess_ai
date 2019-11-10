@@ -1,5 +1,8 @@
+import importlib
 import pathlib
+from typing import List
 
+import chess
 import numpy as np
 from chess import pgn, Board
 from tqdm import tqdm
@@ -18,7 +21,7 @@ INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
 observed_states = set()
 
 
-def get_state_legal_moves(board):
+def get_state_legal_moves(board: chess.Board) -> List[np.ndarray]:
     """Go through all the legal moves of the current board state and return a list of onehot
     vectors"""
     state_legal_moves = []
