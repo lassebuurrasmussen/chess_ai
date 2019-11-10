@@ -1,29 +1,30 @@
 import importlib
 import pathlib
-from typing import List
+import random
+from os import PathLike
+from typing import List, Optional, Union, Tuple, TextIO
 
 import chess
 import numpy as np
 from chess import pgn, Board
+from sklearn.preprocessing import OneHotEncoder
 from tqdm import tqdm
 
 import utility_module as ut
+from neural_nets import Net
+from utility_module import ALL_MOVES_1D
 
 importlib.reload(ut)
 
 INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
 
-# TODO Make sure that the legal moves data is rotated so that it's always from white's perspective
-#  I would also like to only have unique states in the legal moves training data
+# TODO Verify that code works before I start training
 
-# Todo - I need to find a better way to handle the data as I run out of ram this way. Maybe I should
-#  just have a function on top of the neural net that takes a simple representation
-#  (like FEN - call board.board_fen() to get), and then convertes to onehot representation.
 
 observed_states = set()
 
 
-def get_state_legal_moves(board: chess.Board) -> List[np.ndarray]:
+def get_state_legal_moves(board: chess.Board) -> List[int]:
     """Go through all the legal moves of the current board state and return a list of onehot
     vectors"""
     state_legal_moves = []
@@ -34,39 +35,70 @@ def get_state_legal_moves(board: chess.Board) -> List[np.ndarray]:
     return state_legal_moves
 
 
-def get_single_games_states(game, return_legal_moves):
+def add_board_state_to_list(board: chess.Board, in_list: list) -> None:
+    """Extracts state from board and appends to input list"""
+    state = ut.get_board_state(in_board=board)
+    in_list.append(state)
+
+
+def add_if_known(board: chess.Board, game_legal_moves: List[List[int]],
+                 game_states: List[np.ndarray]) -> None:
+    """If board state hasn't already been observed:
+    Adds state to set of observed states. Adds legal moves corresponding to the Board."""
+    board_fen = board.board_fen()
+    if board_fen not in observed_states:
+        observed_states.add(board_fen)
+
+        state_legal_moves = get_state_legal_moves(board=board)
+        game_legal_moves.append(state_legal_moves)
+
+        add_board_state_to_list(board=board, in_list=game_states)
+
+
+def get_single_games_states(game: chess.pgn.Game, return_legal_moves: bool):
     """Create new chess.Board instance and plays game till the end. Returns list of array of all
     states along the way.
     Can also return list of legal moves per state"""
     board = Board()
     game_states = []
     game_legal_moves = []
+    white_turn = True
     for move in game.mainline_moves():
-        state = get_board_state(board)
 
         if return_legal_moves:
-            state_legal_moves = get_state_legal_moves(board=board)
-            game_legal_moves.append(state_legal_moves)
+            # Only add board position to data if it hasn't been observed
+            board_to_save = board if white_turn else board.mirror()
 
-        game_states.append(state)
+            add_if_known(board=board_to_save, game_legal_moves=game_legal_moves,
+                         game_states=game_states)
+            white_turn = not white_turn
+
+        else:
+            # Add board position to data irrespective of whether it's been observed
+            add_board_state_to_list(board=board, in_list=game_states)
 
         board.push(move)
 
-    # Get last state
-    state = get_board_state(board)
-    game_states.append(state)
-
     if return_legal_moves:
         return game_states, game_legal_moves
+
     else:
+        # Get last state
+        # (As it's only relevant when not looking at legal moves as there are no more moves)
+        add_board_state_to_list(board=board, in_list=game_states)
+
         return game_states
 
 
-def get_all_games_states(pgn_file, games_to_get, separate_by_game, return_legal_moves):
-    """Extracts the either a long list of all states from the pgn file or a list for each game with
-    a list of states"""
+def get_all_games_states(pgn_file: TextIO, games_to_get: int, return_legal_moves: bool,
+                         show_progress: bool
+                         ) -> Union[Tuple[List[np.ndarray],
+                                          List[List[int]]],
+                                    List[np.ndarray]]:
+    """Extracts a list for each game with a list of states"""
     all_states, all_legal_moves = [], []
-    for _ in tqdm(range(games_to_get)):
+    iterator = tqdm(range(games_to_get)) if show_progress else range(games_to_get)
+    for _ in iterator:
         game = pgn.read_game(pgn_file)
         assert not game.errors
 
@@ -77,11 +109,8 @@ def get_all_games_states(pgn_file, games_to_get, separate_by_game, return_legal_
             # game_legal_moves = np.array(game_legal_moves)
             all_legal_moves.append(game_legal_moves)
 
-        if separate_by_game:
-            game_states = np.array(game_states)
-            all_states.append(game_states)
-        else:
-            all_states.extend(game_states)
+        game_states = np.array(game_states)
+        all_states.append(game_states)
 
     if return_legal_moves:
         return all_states, all_legal_moves
@@ -89,11 +118,12 @@ def get_all_games_states(pgn_file, games_to_get, separate_by_game, return_legal_
         return all_states
 
 
-def get_states_from_pgn(input_file, n_games_to_get=None, separate_by_game=True,
-                        return_legal_moves=False):
-    """Opens specified input pgn file and extracts all states from all games. Returns either a long
-    array of all states from the pgn file or a list with an array for each game."""
-    # Encoding -> https://python-chess.readthedocs.io/en/latest/pgn.html
+def get_states_from_pgn(input_file: PathLike, n_games_to_get: Optional[int] = None,
+                        return_legal_moves: bool = False, show_progress: bool = False
+                        ) -> Union[Tuple[List[np.ndarray], List[List[str]]],
+                                   List[np.ndarray]]:
+    """Opens specified input pgn file and extracts all states from all games.."""
+    # Encoding used comes from https://python-chess.readthedocs.io/en/latest/pgn.html
     n_games = ut.count_games_from_pgn(input_file=input_file)
     pgn_file = open(input_file, encoding="utf-8-sig")
 
@@ -102,16 +132,14 @@ def get_states_from_pgn(input_file, n_games_to_get=None, separate_by_game=True,
 
     all_legal_moves = None
     all_states = get_all_games_states(pgn_file=pgn_file, games_to_get=n_games_to_get,
-                                      separate_by_game=separate_by_game,
-                                      return_legal_moves=return_legal_moves)
+                                      return_legal_moves=return_legal_moves,
+                                      show_progress=show_progress)
 
     if return_legal_moves:
+        # Unpack returned variable
         all_states, all_legal_moves = all_states
 
     pgn_file.close()
-
-    if not separate_by_game:
-        all_states = np.array(all_states)
 
     if return_legal_moves:
         return all_states, all_legal_moves
@@ -119,12 +147,11 @@ def get_states_from_pgn(input_file, n_games_to_get=None, separate_by_game=True,
         return all_states
 
 
-states, legal_moves = get_states_from_pgn(input_file=INPUT_FILE_PATH, n_games_to_get=25,
-                                          separate_by_game=True,
+states, legal_moves = get_states_from_pgn(input_file=INPUT_FILE_PATH, n_games_to_get=20,
                                           return_legal_moves=True)
 
-n_games = len(states)
-n_games_val = n_games // 20
+assert len(states) == len(legal_moves)
+assert all([len(st) == len(leg) for st, leg in zip(states, legal_moves)])
 
 
 def preprocess_legal_move_data(all_states, all_legal_moves):
