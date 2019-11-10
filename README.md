@@ -44,9 +44,18 @@ I will compare the effect of this embedding to just inputting the plain state ar
 
 I would really like for my policy network to output a probability over the moves. But how do I achieve that? I can make it a classification task where the output is a 589056 long one-hot vector (permutations of size 2 from 12 * 8 * 8 fields). Then I would get probabilities. I can't really figure out if that is better than getting an output array with shape (12, 8, 8). Because this would only output a single move. And what if that move is not legal? I think I'll just have to try.
 
-#####Next steps:
+##### Next steps:
 1. Get input arrays for legal moves network from a subset of games
 2. Get corresponding output as one-hot vector of legal moves
+3. Train a network to predict legal moves.
+4. Extract embeddings from legal moves network
+5. Think about what the value net would look like
+
+_Nov 10 - 19_
+
+##### Next steps:
+1. ~~Get input arrays for legal moves network from a subset of games~~
+2. ~~Get corresponding output as one-hot vector of legal moves~~
 3. Train a network to predict legal moves.
 4. Extract embeddings from legal moves network
 5. Think about what the value net would look like
