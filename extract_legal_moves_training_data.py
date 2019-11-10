@@ -18,10 +18,9 @@ importlib.reload(ut)
 
 INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
 
-# TODO Verify that code works before I start training
-
-
 observed_states = set()
+
+LegalMovesT = List[List[int]]
 
 
 def get_state_legal_moves(board: chess.Board) -> List[int]:
@@ -41,7 +40,7 @@ def add_board_state_to_list(board: chess.Board, in_list: list) -> None:
     in_list.append(state)
 
 
-def add_if_known(board: chess.Board, game_legal_moves: List[List[int]],
+def add_if_known(board: chess.Board, game_legal_moves: LegalMovesT,
                  game_states: List[np.ndarray]) -> None:
     """If board state hasn't already been observed:
     Adds state to set of observed states. Adds legal moves corresponding to the Board."""
@@ -93,7 +92,7 @@ def get_single_games_states(game: chess.pgn.Game, return_legal_moves: bool):
 def get_all_games_states(pgn_file: TextIO, games_to_get: int, return_legal_moves: bool,
                          show_progress: bool
                          ) -> Union[Tuple[List[np.ndarray],
-                                          List[List[int]]],
+                                          LegalMovesT],
                                     List[np.ndarray]]:
     """Extracts a list for each game with a list of states"""
     all_states, all_legal_moves = [], []
@@ -156,7 +155,7 @@ assert all([len(st) == len(leg) for st, leg in zip(states, legal_moves)])
 
 #%%
 
-def preprocess_legal_move_data(games_states: List[np.ndarray], games_legal_moves: List[List[int]],
+def preprocess_legal_move_data(games_states: List[np.ndarray], games_legal_moves: LegalMovesT,
                                ohe: OneHotEncoder) -> Tuple[np.ndarray, np.ndarray]:
     """Extracts tuples with arrays of training points."""
     out_data_x = []
@@ -172,25 +171,39 @@ def preprocess_legal_move_data(games_states: List[np.ndarray], games_legal_moves
     return np.array(out_data_x), (ohe.transform(np.array(out_data_y).reshape(-1, 1)))
 
 
-def fit_batches(all_states: List[np.ndarray], all_legal_moves: List[List[int]], batch_size: int,
-                frac_val_games: float = 0.05):
-    total_games = len(states)
-    n_games_val = int(total_games * frac_val_games)
+def train_val_split(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
+                    frac_val_games: float = 0.05
+                    ) -> Tuple[List[int], List[np.ndarray], LegalMovesT, List[np.ndarray],
+                               LegalMovesT]:
+    """Splits games into training and validation games"""
     random.seed(3947)
-    idx_val_games = random.sample(range(total_games), k=n_games_val)
-    idx_train_games = [i for i in range(total_games) if i not in idx_val_games]
+    n_games = len(states)
+    n_games_val = int(n_games * frac_val_games)
+    idx_val_games = random.sample(range(n_games), k=n_games_val)
+    idx_train_games = [i for i in range(n_games) if i not in idx_val_games]
 
-    train_states = [all_states[i] for i in range(total_games) if i in idx_train_games]
-    train_legal_moves = [all_legal_moves[i] for i in range(total_games) if i in idx_train_games]
+    train_states = [all_states[i] for i in range(n_games) if i in idx_train_games]
+    train_legal_moves = [all_legal_moves[i] for i in range(n_games) if i in idx_train_games]
 
-    val_states = [all_states[i] for i in range(total_games) if i in idx_val_games]
-    val_legal_moves = [all_legal_moves[i] for i in range(total_games) if i in idx_val_games]
+    val_states = [all_states[i] for i in range(n_games) if i in idx_val_games]
+    val_legal_moves = [all_legal_moves[i] for i in range(n_games) if i in idx_val_games]
 
-    # Remember to use ohe to de-transform afterwards, as it is not certain to correspond to int
-    # values
+    return idx_train_games, train_states, train_legal_moves, val_states, val_legal_moves
+
+
+def make_onehot_encoder():
+    """Remember to use ohe to de-transform afterwards, as it is not certain to correspond to int
+    values"""
     n_moves = len(ALL_MOVES_1D)
-    ohe: OneHotEncoder = (OneHotEncoder(categories='auto', sparse=False)
-                          .fit(np.arange(n_moves).reshape(-1, 1)))
+    return OneHotEncoder(categories='auto', sparse=False).fit(np.arange(n_moves).reshape(-1, 1))
+
+
+def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT, batch_size: int,
+                frac_val_games: float = 0.05):
+    idx_train_games, train_states, train_legal_moves, val_states, val_legal_moves = train_val_split(
+        all_states=all_states, all_legal_moves=all_legal_moves, frac_val_games=frac_val_games)
+
+    ohe = make_onehot_encoder()
 
     val_x, val_y = preprocess_legal_move_data(games_states=val_states,
                                               games_legal_moves=val_legal_moves,
@@ -206,10 +219,12 @@ def fit_batches(all_states: List[np.ndarray], all_legal_moves: List[List[int]], 
         batch_x, batch_y = preprocess_legal_move_data(games_states=batch_states,
                                                       games_legal_moves=batch_legal_moves, ohe=ohe)
 
-        # Todo - implement Net
         model = Net()
         model.fit(x=batch_x, y=batch_y)
-        val_loss = model.test(x=val_x, y=val_y)
 
 
 fit_batches(all_states=states, all_legal_moves=legal_moves, batch_size=5)
+
+# Todo:
+#  Verify that "get_states_from_pgn" works before I start training.
+#  Implement Net.
