@@ -84,9 +84,9 @@ optimizer: torch.optim.Adam = torch.optim.Adam(net.parameters())
 criterion = nn.CrossEntropyLoss()
 
 i1 = 2020
-i2 = 3030
+i2 = 2030
 
-for _ in range(100):
+for _ in range(50):
     run_epoch(batch_x[i1:i2], batch_y[i1:i2])
 
 print(net(batch_x[i1:i2]).argmax(1))
