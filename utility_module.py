@@ -93,8 +93,8 @@ def coordinates_to_onehot_index(entry: Tuple[int, int]) -> int:
     return (entry[0]) * 63 + entry[1] - 1 + int(entry[0] > entry[1])
 
 
-def uci2onehot(uci: str) -> int:
-    """Takes UCI move str and converts it to a onehot vector"""
+def uci2onehot_idx(uci: str) -> int:
+    """Takes UCI move str and converts it to index of a onehot vector of all moves"""
     # Translate UCI move to integers e.g. 'g' is has unicode 103 and is the index 6 column on the
     # board. So g -> 6
     move_translated = uci.translate(UCI_LETTER_LOOKUP)

@@ -29,7 +29,7 @@ def get_state_legal_moves(board: chess.Board) -> List[int]:
     state_legal_moves = []
     for legal_move in board.legal_moves:
         uci = legal_move.uci()
-        state_legal_moves.append(ut.uci2onehot(uci=uci))
+        state_legal_moves.append(ut.uci2onehot_idx(uci=uci))
 
     return state_legal_moves
 
@@ -62,7 +62,7 @@ def get_single_games_states(game: chess.pgn.Game, return_legal_moves: bool):
     game_states = []
     game_legal_moves = []
     white_turn = True
-    for move in game.mainline_moves():
+    for move_i, move in enumerate(game.mainline_moves()):
 
         if return_legal_moves:
             # Only add board position to data if it hasn't been observed
@@ -225,5 +225,4 @@ def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT, batc
 fit_batches(all_states=states, all_legal_moves=legal_moves, batch_size=5)
 
 # Todo:
-#  Verify that "get_states_from_pgn" works before I start training.
 #  Implement Net.
