@@ -105,7 +105,6 @@ def get_all_games_states(pgn_file: TextIO, games_to_get: int, return_legal_moves
 
         if return_legal_moves:
             game_states, game_legal_moves = game_states
-            # game_legal_moves = np.array(game_legal_moves)
             all_legal_moves.append(game_legal_moves)
 
         game_states = np.array(game_states)
