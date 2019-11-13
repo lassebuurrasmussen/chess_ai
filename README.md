@@ -51,3 +51,10 @@ _Updated Nov 10 - 19_
 3. Train a network to predict legal moves.
 4. Extract embeddings from legal moves network
 5. Think about what the value net would look like
+
+##### Useful links
+A fen viewer. To quickly visualize board from fen string
+http://www.chess-poster.com/english/fen/fen_epd_viewer.htm
+
+PGN viewer to see how a game is played (remember that board is turned and NOT mirrored for black turn as in my code)
+https://chesstempo.com/pgn-viewer.html
