@@ -38,7 +38,7 @@ class LegalMovePredictor(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         downsample = F.dropout(self.conv1(x))
 
-        flat = downsample.view(len(downsample), -1)
+        flat = downsample.view(downsample.shape[0], -1)
         dense_out = F.dropout(self.dense(flat))
         output = F.softmax(F.dropout(self.classification(dense_out)), 1)
 
@@ -129,5 +129,5 @@ for i, fen in enumerate(fens):
     if preds[i] in [ut.uci2onehot_idx(str(uci)) for uci in chess.Board(fen).legal_moves]:
         correct += 1
 
-print(f"Accuracy: {accuracy:.3f}")
-print(f"Prediction correct ratio: {correct / len(fens):.3f}")
+print(f"Train accuracy: {accuracy:.3f}")
+print(f"Train prediction correct ratio: {correct / len(fens):.3f}")
