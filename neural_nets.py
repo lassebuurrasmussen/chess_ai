@@ -11,7 +11,7 @@ from resnet_module import ResNet, BasicBlock
 
 
 def run_epoch(batch_x: torch.Tensor, batch_y: torch.Tensor, optimizer, criterion, net, batch_size,
-              losses, time_steps):
+              losses, time_steps, val_losses):
     start_idxs = range(0, batch_x.shape[0], batch_size)
     for minibatch_i, start_idx in tqdm(list(enumerate(start_idxs))):
         optimizer.zero_grad()
@@ -30,6 +30,12 @@ def run_epoch(batch_x: torch.Tensor, batch_y: torch.Tensor, optimizer, criterion
                 train_loss = criterion(net(batch_x), batch_y)
                 losses.append(train_loss)
                 time_steps.append(minibatch_i + 1 + time_steps[-1])
+
+                evaluate(in_net=net, in_val_x=val_X, in_val_y=val_y, criterion=criterion,
+                         val_losses=val_losses, time_steps=time_steps)
+
+                print(
+                    f"train loss: {train_loss:.3f}, val loss: {list(val_losses.values())[-1]:.3f}")
 
 
 def evaluate(in_net, in_val_x, in_val_y, criterion, val_losses, time_steps):
@@ -54,11 +60,10 @@ def fit(batch_x, batch_y, batch_size, n_epochs, lr):
     time_steps = [0]
     for _ in range(n_epochs):
         run_epoch(batch_x, batch_y, optimizer=optimizer, criterion=criterion, net=model,
-                  batch_size=batch_size, losses=losses, time_steps=time_steps)
+                  batch_size=batch_size, losses=losses, time_steps=time_steps,
+                  val_losses=val_losses)
 
         # if not epoch % 10:
-        evaluate(in_net=model, in_val_x=val_X, in_val_y=val_y, criterion=criterion,
-                 val_losses=val_losses, time_steps=time_steps)
 
     return model, losses, time_steps, val_losses
 
@@ -85,6 +90,8 @@ plt.plot(ts[1:], train_losses)
 plt.plot(*list(zip(*val_l.items())))
 plt.show()
 
+legal_moves_net: ResNet
+legal_moves_net.eval()
 # Evaluate accuracy and correctness
 preds = legal_moves_net(X).argmax(1)
 accuracy = (preds == y).int().float().mean()
@@ -107,3 +114,10 @@ print(f"Train prediction correct ratio: {correct / len(fens):.3f}")
 
 print(f"Test accuracy: {accuracy_val:.3f}")
 print(f"Test prediction correct ratio: {correct_val / len(val_fens):.3f}")
+
+# todo
+#  - Check if evaluation function works properly
+#  - Check top 5, 10, 15 outputs and see if they're in legal moves
+#  - Consider using fastai library
+#  - Set it up so that it can train on (almost?) all of the available games
+#  - Conver to multi label exercise to avoid correct guesses being punished
