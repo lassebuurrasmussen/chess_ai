@@ -153,8 +153,12 @@ states, legal_moves = get_states_from_pgn(input_file=INPUT_FILE_PATH, n_games_to
                                           return_legal_moves=True)
 
 assert len(states) == len(legal_moves)
-assert all([len(st) == len(leg) for st, leg in zip(states, legal_moves)])
+assert [len(s) for s in states] == [len(leg) for leg in legal_moves]
 assert len(observed_states) == sum([len(s) for s in states])
+
+# Split observed states by game
+observed_states = ut.split_list_as(in_list=observed_states, template_list=states)
+assert [len(obs) for obs in observed_states] == [len(s) for s in states]
 
 
 #%%

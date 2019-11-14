@@ -1,7 +1,7 @@
 import re
 from itertools import permutations
 from os import PathLike
-from typing import Tuple
+from typing import Tuple, List
 
 import chess
 import numpy as np
@@ -123,3 +123,14 @@ def uci2onehot_idx(uci: str) -> int:
     # onehot[hot] = 1
 
     return hot
+
+
+def split_list_as(in_list: List, template_list: List[List]) -> List[List]:
+    """Takes a long list and subdivides it as the provided template list"""
+    splitted_list = []
+    total_length = 0
+    for game_length in [len(s) for s in template_list]:
+        splitted_list.append(in_list[total_length:total_length + game_length])
+        total_length += game_length
+
+    return splitted_list
