@@ -1,29 +1,30 @@
 import importlib
 import pathlib
-import random
 from os import PathLike
 from typing import List, Optional, Union, Tuple, TextIO
 
 import chess
 import numpy as np
 from chess import pgn, Board
-from sklearn.preprocessing import OneHotEncoder
 from tqdm import tqdm
 
 import utility_module as ut
-# from neural_nets import Net
-from utility_module import ALL_MOVES_1D
 
 importlib.reload(ut)
 
 INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
 
+# Type defining
 LegalMovesT = List[List[int]]
+FensT = List[List[str]]
+
+observed_states_set = set()
+observed_states = []
 
 
 def get_state_legal_moves(board: chess.Board) -> List[int]:
     """Go through all the legal moves of the current board state and return a list of onehot
-    vectors"""
+    vector indices"""
     state_legal_moves = []
     for legal_move in board.legal_moves:
         uci = legal_move.uci()
@@ -40,8 +41,8 @@ def add_board_state_to_list(board: chess.Board, in_list: list) -> None:
 
 def add_if_known(board: chess.Board, game_legal_moves: LegalMovesT,
                  game_states: List[np.ndarray]) -> None:
-    """If board state hasn't already been observed:
-    Adds state to set of observed states. Adds legal moves corresponding to the Board."""
+    """If board state hasn't already been observed: Adds state to set and list of observed states.
+    Also adds legal moves and state corresponding to the Board."""
     board_fen = board.board_fen()
     if board_fen not in observed_states_set:
         observed_states_set.add(board_fen)
@@ -61,15 +62,18 @@ def get_single_games_states(game: chess.pgn.Game, return_legal_moves: bool
     Can also return list of legal moves per state"""
     board = Board()
     game_states, game_legal_moves = [], []
-    white_turn = True
+    white_turn = True  # Keep track of who's turn it is
+
     for move_i, move in enumerate(game.mainline_moves()):
 
         if return_legal_moves:
-            # Only add board position to data if it hasn't been observed
             board_to_save = board if white_turn else board.mirror()
 
+            # Only add board position to data if it hasn't been observed
             add_if_known(board=board_to_save, game_legal_moves=game_legal_moves,
                          game_states=game_states)
+
+            # Next player's turn
             white_turn = not white_turn
 
         else:
@@ -145,93 +149,24 @@ def get_states_from_pgn(input_file: PathLike, n_games_to_get: Optional[int] = No
         return all_states
 
 
-# Keep both a set and a list to save time on "in" operation, but preserve order.
-# Obviously at the cost of more memory
-observed_states_set, observed_states = set(), []
+def process_pgn(input_file: PathLike, n_games_to_get: int
+                ) -> Tuple[List[np.ndarray], LegalMovesT, FensT]:
+    # Keep both a set and a list to save time on "in" operation, but preserve order.
+    # Obviously at the cost of more memory
 
-states, legal_moves = get_states_from_pgn(input_file=INPUT_FILE_PATH, n_games_to_get=20,
-                                          return_legal_moves=True)
+    global observed_states_set
+    global observed_states
 
-assert len(states) == len(legal_moves)
-assert [len(s) for s in states] == [len(leg) for leg in legal_moves]
-assert len(observed_states) == sum([len(s) for s in states])
+    all_states, all_legal_moves = get_states_from_pgn(input_file=input_file,
+                                                      n_games_to_get=n_games_to_get,
+                                                      return_legal_moves=True)
 
-# Split observed states by game
-observed_states = ut.split_list_as(in_list=observed_states, template_list=states)
-assert [len(obs) for obs in observed_states] == [len(s) for s in states]
+    assert len(all_states) == len(all_legal_moves)
+    assert [len(s) for s in all_states] == [len(leg) for leg in all_legal_moves]
+    assert len(observed_states) == sum([len(s) for s in all_states])
 
+    # Split observed states by game
+    all_fens = ut.split_list_as(in_list=observed_states, template_list=all_states)
+    assert [len(obs) for obs in all_fens] == [len(s) for s in all_states]
 
-#%%
-
-def preprocess_legal_move_data(games_states: List[np.ndarray], games_legal_moves: LegalMovesT,
-                               ohe: OneHotEncoder) -> Tuple[np.ndarray, np.ndarray]:
-    """Extracts tuples with arrays of training points."""
-    out_data_x = []
-    out_data_y = []
-    for game_states, game_legal_moves in tqdm(list(zip(games_states, games_legal_moves))):
-
-        for state, state_legal_moves in zip(game_states, game_legal_moves):
-
-            for legal_move in state_legal_moves:
-                out_data_x.append(state)
-                out_data_y.append(legal_move)
-
-    return np.array(out_data_x), np.array(out_data_y)
-
-
-def train_val_split(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
-                    frac_val_games: float = 0.05
-                    ) -> Tuple[List[int], List[np.ndarray], LegalMovesT, List[np.ndarray],
-                               LegalMovesT]:
-    """Splits games into training and validation games"""
-    n_games = len(states)
-    n_games_val = int(n_games * frac_val_games)
-    idx_val_games = random.sample(range(n_games), k=n_games_val)
-    idx_train_games = [i for i in range(n_games) if i not in idx_val_games]
-
-    train_states = [all_states[i] for i in range(n_games) if i in idx_train_games]
-    train_legal_moves = [all_legal_moves[i] for i in range(n_games) if i in idx_train_games]
-
-    val_states = [all_states[i] for i in range(n_games) if i in idx_val_games]
-    val_legal_moves = [all_legal_moves[i] for i in range(n_games) if i in idx_val_games]
-
-    return idx_train_games, train_states, train_legal_moves, val_states, val_legal_moves
-
-
-def make_onehot_encoder():
-    """Remember to use ohe to de-transform afterwards, as it is not certain to correspond to int
-    values"""
-    n_moves = len(ALL_MOVES_1D)
-    return OneHotEncoder(categories='auto', sparse=False).fit(np.arange(n_moves).reshape(-1, 1))
-
-
-def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT, batch_size: int,
-                frac_val_games: float = 0.05):
-    random.seed(3947)
-    idx_train_games, train_states, train_legal_moves, val_states, val_legal_moves = train_val_split(
-        all_states=all_states, all_legal_moves=all_legal_moves, frac_val_games=frac_val_games)
-
-    ohe = make_onehot_encoder()
-
-    val_x, val_y = preprocess_legal_move_data(games_states=val_states,
-                                              games_legal_moves=val_legal_moves,
-                                              ohe=ohe)
-
-    idx_train_games_shuffled = random.sample(idx_train_games, len(idx_train_games))
-    for batch_i in range(0, len(idx_train_games), batch_size):
-        batch_idxs = idx_train_games_shuffled[batch_i:batch_i + batch_size]
-
-        batch_states = [train_states[i] for i in batch_idxs]
-        batch_legal_moves = [train_legal_moves[i] for i in batch_idxs]
-
-        batch_x, batch_y = preprocess_legal_move_data(games_states=batch_states,
-                                                      games_legal_moves=batch_legal_moves, ohe=ohe)
-
-        model = Net()
-        model.fit(x=batch_x, y=batch_y)
-
-
-fit_batches(all_states=states, all_legal_moves=legal_moves, batch_size=5)
-
-# Todo:
-#  Implement Net.
+    return all_states, all_legal_moves, all_fens

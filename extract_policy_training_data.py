@@ -4,7 +4,7 @@ import joblib
 import numpy as np
 from scipy import sparse
 
-from extract_legal_moves_training_data import get_states_from_pgn
+from extract_legal_moves import get_states_from_pgn
 from utility_module import mirror_state
 
 INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
