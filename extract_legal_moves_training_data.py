@@ -54,13 +54,14 @@ def add_if_known(board: chess.Board, game_legal_moves: LegalMovesT,
         add_board_state_to_list(board=board, in_list=game_states)
 
 
-def get_single_games_states(game: chess.pgn.Game, return_legal_moves: bool):
+def get_single_games_states(game: chess.pgn.Game, return_legal_moves: bool
+                            ) -> Union[Tuple[List[np.ndarray], List[int]],
+                                       List[np.ndarray]]:
     """Create new chess.Board instance and plays game till the end. Returns list of array of all
     states along the way.
     Can also return list of legal moves per state"""
     board = Board()
-    game_states = []
-    game_legal_moves = []
+    game_states, game_legal_moves = [], []
     white_turn = True
     for move_i, move in enumerate(game.mainline_moves()):
 
@@ -118,7 +119,7 @@ def get_all_games_states(pgn_file: TextIO, games_to_get: int, return_legal_moves
 
 def get_states_from_pgn(input_file: PathLike, n_games_to_get: Optional[int] = None,
                         return_legal_moves: bool = False, show_progress: bool = False
-                        ) -> Union[Tuple[List[np.ndarray], List[List[str]]],
+                        ) -> Union[Tuple[List[np.ndarray], LegalMovesT],
                                    List[np.ndarray]]:
     """Opens specified input pgn file and extracts all states from all games.."""
     # Encoding used comes from https://python-chess.readthedocs.io/en/latest/pgn.html
@@ -175,7 +176,6 @@ def train_val_split(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
                     ) -> Tuple[List[int], List[np.ndarray], LegalMovesT, List[np.ndarray],
                                LegalMovesT]:
     """Splits games into training and validation games"""
-    random.seed(3947)
     n_games = len(states)
     n_games_val = int(n_games * frac_val_games)
     idx_val_games = random.sample(range(n_games), k=n_games_val)
@@ -199,6 +199,7 @@ def make_onehot_encoder():
 
 def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT, batch_size: int,
                 frac_val_games: float = 0.05):
+    random.seed(3947)
     idx_train_games, train_states, train_legal_moves, val_states, val_legal_moves = train_val_split(
         all_states=all_states, all_legal_moves=all_legal_moves, frac_val_games=frac_val_games)
 
