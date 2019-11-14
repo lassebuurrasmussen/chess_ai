@@ -11,14 +11,12 @@ from sklearn.preprocessing import OneHotEncoder
 from tqdm import tqdm
 
 import utility_module as ut
-from neural_nets import Net
+# from neural_nets import Net
 from utility_module import ALL_MOVES_1D
 
 importlib.reload(ut)
 
 INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
-
-observed_states = set()
 
 LegalMovesT = List[List[int]]
 
@@ -45,8 +43,9 @@ def add_if_known(board: chess.Board, game_legal_moves: LegalMovesT,
     """If board state hasn't already been observed:
     Adds state to set of observed states. Adds legal moves corresponding to the Board."""
     board_fen = board.board_fen()
-    if board_fen not in observed_states:
-        observed_states.add(board_fen)
+    if board_fen not in observed_states_set:
+        observed_states_set.add(board_fen)
+        observed_states.append(board_fen)
 
         state_legal_moves = get_state_legal_moves(board=board)
         game_legal_moves.append(state_legal_moves)
@@ -146,11 +145,16 @@ def get_states_from_pgn(input_file: PathLike, n_games_to_get: Optional[int] = No
         return all_states
 
 
+# Keep both a set and a list to save time on "in" operation, but preserve order.
+# Obviously at the cost of more memory
+observed_states_set, observed_states = set(), []
+
 states, legal_moves = get_states_from_pgn(input_file=INPUT_FILE_PATH, n_games_to_get=20,
                                           return_legal_moves=True)
 
 assert len(states) == len(legal_moves)
 assert all([len(st) == len(leg) for st, leg in zip(states, legal_moves)])
+assert len(observed_states) == sum([len(s) for s in states])
 
 
 #%%
