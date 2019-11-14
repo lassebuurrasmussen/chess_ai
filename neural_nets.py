@@ -1,20 +1,18 @@
+import chess
 import joblib
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 # noinspection PyPep8Naming
 import torch.nn.functional as F
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 
-
-def relu_conv(x, conv, do_relu=True):
-    x = conv(x)
-    if do_relu:
-        x = F.relu(x)
-    return x
+import utility_module as ut
 
 
 class ReluConv(nn.Module):
+    """A convolution with relu activation"""
+
     def __init__(self, in_channels, out_channels, kernel_size, stride, padding):
         super(ReluConv, self).__init__()
 
@@ -26,36 +24,19 @@ class ReluConv(nn.Module):
         return F.relu(self.conv(x))
 
 
-class Net(nn.Module):
-
+class LegalMovePredictor(nn.Module):
     def __init__(self):
-        super(Net, self).__init__()
-        self.conv1 = ReluConv(in_channels=12, out_channels=3, kernel_size=3, stride=1, padding=1)
-        # self.conv2 = ReluConv(in_channels=6, out_channels=3, kernel_size=3, stride=1, padding=1)
-        # self.conv3 = ReluConv(in_channels=3, out_channels=1, kernel_size=3, stride=1, padding=1)
+        super(LegalMovePredictor, self).__init__()
+        out_channels = 3
+        self.conv1 = ReluConv(in_channels=12, out_channels=out_channels, kernel_size=3, stride=1,
+                              padding=1)
 
-        # self.fc1 = nn.Linear(8 * 8, 512)
-        # self.fc1 = nn.Linear(12 * 8 * 8, 512)
-        # self.fc1 = nn.Linear(12 * 8 * 8, 1024)
-        # self.fc1 = nn.Linear(3 * 8 * 8, 1024)
-        # self.fc2 = nn.Linear(512, 1024)
-        # self.classification = nn.Linear(1024, 4032)
-        self.classification = nn.Linear(3 * 8 * 8, 4032)
+        n_moves = 4032
+        self.classification = nn.Linear(out_channels * 8 * 8, n_moves)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        downsample = (
-            #     self.conv3(
-            #         self.conv2(
-            self.conv1(x)
-        )
-
-        #         ))
+        downsample = self.conv1(x)
         flat = downsample.view(len(downsample), -1)
-        # dense1 = F.relu(self.fc1(x))
-        # dense2 = F.relu(self.fc1(flat))
-        # dense2 = F.relu(self.fc2(dense1))
-
-        # output = F.softmax(self.classification(dense2), 1)
         output = F.softmax(self.classification(flat), 1)
 
         return output
@@ -72,7 +53,6 @@ def run_epoch(batch_x: torch.Tensor, batch_y: torch.Tensor, optimizer, criterion
         output = net(batch_x[slicer])
 
         loss = criterion(output, batch_y[slicer])
-
         loss.backward()
 
         with torch.no_grad():
@@ -80,41 +60,46 @@ def run_epoch(batch_x: torch.Tensor, batch_y: torch.Tensor, optimizer, criterion
 
             if not minibatch_i % 10:
                 train_loss = criterion(net(batch_x), batch_y)
-                # print(f"train loss: {round(train_loss.item(), 5)}")
                 losses.append(train_loss)
 
 
 def fit(batch_x, batch_y, batch_size=64 * 2, n_epochs=70, lr=1e-3):
-    losses = []
-    net: Net = Net()
-    net.float()
-    optimizer: torch.optim.Adam = torch.optim.Adam(net.parameters(), lr=lr)
-
+    lmp: LegalMovePredictor = LegalMovePredictor()
+    lmp.float()
+    optimizer: torch.optim.Adam = torch.optim.Adam(lmp.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
 
-    for epoch in tqdm(range(n_epochs)):
-        # print(f"\nEpoch {epoch}")
-
-        run_epoch(batch_x, batch_y, optimizer=optimizer, criterion=criterion, net=net,
+    losses = []
+    for _ in tqdm(range(n_epochs)):
+        run_epoch(batch_x, batch_y, optimizer=optimizer, criterion=criterion, net=lmp,
                   batch_size=batch_size, losses=losses)
 
-    return net, losses
+    return lmp, losses
 
 
-fraction = slice(50)
-N_EPOCHS = 200
-# LR = 5e-2
+dp_slicer = slice(200)  # N data points to use
+N_EPOCHS = 170
 LR = 1e-3
 
-X = torch.tensor(joblib.load("./tmp_batch_x")).float()[fraction]
-X = X.view(-1, 12, 8, 8)
-y = torch.tensor(joblib.load("./tmp_batch_y"))[fraction]
+# Load a teporarily saved sample data
+X = torch.tensor(joblib.load("./tmp_batch_x")).float()[dp_slicer]
+y = torch.tensor(joblib.load("./tmp_batch_y"))[dp_slicer]
+fens = joblib.load("./tmp_batch_fens")[dp_slicer]
 
 legal_moves_net, train_losses = fit(batch_x=X, batch_y=y, n_epochs=N_EPOCHS, lr=LR)
 
+# Plot loss over time
 plt.plot(range(len(train_losses)), train_losses)
 plt.show()
 
-(legal_moves_net(X).argmax(1) == y).int().float().mean()
+# Evaluate in-sample accuracy and correctness
+preds = legal_moves_net(X).argmax(1)
+accuracy = (preds == y).int().float().mean()
 
-# Todo - evaluer på alle lovlige moves i stedet for y
+correct = 0
+for i, fen in enumerate(fens):
+    if preds[i] in [ut.uci2onehot_idx(str(uci)) for uci in chess.Board(fen).legal_moves]:
+        correct += 1
+
+print(f"Accuracy: {accuracy:.3f}")
+print(f"Prediction correct ratio: {correct / len(fens):.3f}")
