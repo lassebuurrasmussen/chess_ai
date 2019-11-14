@@ -21,6 +21,7 @@ states, legal_moves, fens = process_pgn(input_file=INPUT_FILE_PATH, n_games_to_g
 
 #%%
 
+
 def preprocess_legal_move_data(games_states: List[np.ndarray], games_legal_moves: LegalMovesT,
                                games_fens: FensT
                                ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
@@ -73,6 +74,12 @@ def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
                                                         games_legal_moves=val_legal_moves,
                                                         games_fens=val_fens)
 
+    make_sample_pickle = False
+    if make_sample_pickle:
+        joblib.dump(val_x, "./tmp_val_x")
+        joblib.dump(val_y, "./tmp_val_y")
+        joblib.dump(val_fens, "./tmp_val_fens")
+
     idx_train_games_shuffled = random.sample(idx_train_games, len(idx_train_games))
     for batch_i in range(0, len(idx_train_games), batch_size):
         batch_idxs = idx_train_games_shuffled[batch_i:batch_i + batch_size]
@@ -91,7 +98,6 @@ def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
         batch_y = batch_y[batch_x_idx_shuffled]
         batch_fens = [batch_fens[i] for i in batch_x_idx_shuffled]
 
-        make_sample_pickle = False
         if batch_i == 0:
             if make_sample_pickle:
                 joblib.dump(batch_x, "./tmp_batch_x")
