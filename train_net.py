@@ -5,13 +5,11 @@ from typing import List, Tuple
 
 # import joblib
 import numpy as np
-from sklearn.preprocessing import OneHotEncoder
 from tqdm import tqdm
 
 import utility_module as ut
 # from neural_nets import Net
 from extract_legal_moves import process_pgn, LegalMovesT, FensT
-from utility_module import ALL_MOVES_1D
 
 importlib.reload(ut)
 
@@ -59,13 +57,6 @@ def train_val_split(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
     val_legal_moves = [all_legal_moves[i] for i in range(n_games) if i in idx_val_games]
 
     return idx_train_games, train_states, train_legal_moves, val_states, val_legal_moves
-
-
-def make_onehot_encoder():
-    """Remember to use ohe to de-transform afterwards, as it is not certain to correspond to int
-    values"""
-    n_moves = len(ALL_MOVES_1D)
-    return OneHotEncoder(categories='auto', sparse=False).fit(np.arange(n_moves).reshape(-1, 1))
 
 
 def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
