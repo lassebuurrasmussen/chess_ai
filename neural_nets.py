@@ -32,18 +32,21 @@ class LegalMovePredictor(nn.Module):
                               padding=1)
 
         n_moves = 4032
-        self.classification = nn.Linear(out_channels * 8 * 8, n_moves)
+        self.dense = nn.Linear(out_channels * 8 * 8, 1024)
+        self.classification = nn.Linear(1024, n_moves)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        downsample = self.conv1(x)
+        downsample = F.dropout(self.conv1(x))
+
         flat = downsample.view(len(downsample), -1)
-        output = F.softmax(self.classification(flat), 1)
+        dense_out = F.dropout(self.dense(flat))
+        output = F.softmax(F.dropout(self.classification(dense_out)), 1)
 
         return output
 
 
 def run_epoch(batch_x: torch.Tensor, batch_y: torch.Tensor, optimizer, criterion, net, batch_size,
-              losses):
+              losses, time_steps):
     start_idxs = range(0, batch_x.shape[0], batch_size)
     for minibatch_i, start_idx in enumerate(start_idxs):
         optimizer.zero_grad()
@@ -61,35 +64,60 @@ def run_epoch(batch_x: torch.Tensor, batch_y: torch.Tensor, optimizer, criterion
             if not minibatch_i % 10:
                 train_loss = criterion(net(batch_x), batch_y)
                 losses.append(train_loss)
+                time_steps.append(minibatch_i + 1 + time_steps[-1])
 
 
-def fit(batch_x, batch_y, batch_size=64 * 2, n_epochs=70, lr=1e-3):
+def evaluate(in_net, in_val_x, in_val_y, criterion, val_losses, time_steps):
+    in_net.eval()
+
+    with torch.no_grad():
+        in_net(in_val_x)
+        val_loss = criterion(in_net(in_val_x), in_val_y)
+        val_losses[time_steps[-1]] = val_loss
+
+    in_net.train()
+
+
+def fit(batch_x, batch_y, batch_size, n_epochs, lr):
     lmp: LegalMovePredictor = LegalMovePredictor()
     lmp.float()
     optimizer: torch.optim.Adam = torch.optim.Adam(lmp.parameters(), lr=lr)
     criterion = nn.CrossEntropyLoss()
 
     losses = []
+    val_losses = {}
+    time_steps = [0]
     for _ in tqdm(range(n_epochs)):
         run_epoch(batch_x, batch_y, optimizer=optimizer, criterion=criterion, net=lmp,
-                  batch_size=batch_size, losses=losses)
+                  batch_size=batch_size, losses=losses, time_steps=time_steps)
 
-    return lmp, losses
+        # if not epoch % 10:
+        evaluate(in_net=lmp, in_val_x=val_X, in_val_y=val_y, criterion=criterion,
+                 val_losses=val_losses, time_steps=time_steps)
+
+    return lmp, losses, time_steps, val_losses
 
 
-dp_slicer = slice(200)  # N data points to use
-N_EPOCHS = 170
+dp_slicer = slice(14_000)  # N data points to use
+N_EPOCHS = 3
 LR = 1e-3
+BATCH_SIZE = 128
 
 # Load a teporarily saved sample data
 X = torch.tensor(joblib.load("./tmp_batch_x")).float()[dp_slicer]
 y = torch.tensor(joblib.load("./tmp_batch_y"))[dp_slicer]
 fens = joblib.load("./tmp_batch_fens")[dp_slicer]
 
-legal_moves_net, train_losses = fit(batch_x=X, batch_y=y, n_epochs=N_EPOCHS, lr=LR)
+val_X = torch.tensor(joblib.load("./tmp_val_x")).float()
+val_y = torch.tensor(joblib.load("./tmp_val_y"))
+val_fens = joblib.load("./tmp_val_fens")
+
+legal_moves_net, train_losses, ts, val_l = fit(batch_x=X, batch_y=y, batch_size=BATCH_SIZE,
+                                               n_epochs=N_EPOCHS, lr=LR)
 
 # Plot loss over time
-plt.plot(range(len(train_losses)), train_losses)
+plt.plot(ts[1:], train_losses)
+plt.plot(*list(zip(*val_l.items())))
 plt.show()
 
 # Evaluate in-sample accuracy and correctness
