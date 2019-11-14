@@ -4,6 +4,7 @@ import random
 from typing import List, Tuple
 
 # import joblib
+import joblib
 import numpy as np
 from tqdm import tqdm
 
@@ -90,16 +91,13 @@ def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
         batch_y = batch_y[batch_x_idx_shuffled]
         batch_fens = [batch_fens[i] for i in batch_x_idx_shuffled]
 
-        # # Flatten x
-        # batch_x = batch_x.reshape(len(batch_x), -1)
-
-        # if batch_i == 0:
-        #     joblib.dump(batch_x, "./tmp_batch_x")
-        #     joblib.dump(batch_y, "./tmp_batch_y")
-        #     joblib.dump(batch_fens, "./tmp_batch_fens")
-        #     raise Exception
-        # model = Net()
-        # model.fit(x=batch_x, y=batch_y)
+        make_sample_pickle = False
+        if batch_i == 0:
+            if make_sample_pickle:
+                joblib.dump(batch_x, "./tmp_batch_x")
+                joblib.dump(batch_y, "./tmp_batch_y")
+                joblib.dump(batch_fens, "./tmp_batch_fens")
+            raise Exception
 
 
 fit_batches(all_states=states, all_legal_moves=legal_moves, all_fens=fens, batch_size=5)
