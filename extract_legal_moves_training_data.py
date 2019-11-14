@@ -172,7 +172,7 @@ def preprocess_legal_move_data(games_states: List[np.ndarray], games_legal_moves
                 out_data_x.append(state)
                 out_data_y.append(legal_move)
 
-    return np.array(out_data_x), (ohe.transform(np.array(out_data_y).reshape(-1, 1)))
+    return np.array(out_data_x), np.array(out_data_y)
 
 
 def train_val_split(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
