@@ -29,7 +29,7 @@ One way would be to just have the net choose two sets of coordinates. The origin
 Maybe I could have the `python-chess` return all the legal moves, and then I could estimate the value of each of the new states, given the experience of the model. This sounds like it might be a better option...\
 I think DeepMind's AlphaGo has two nets. One to estimate the policy and one to estimate the value. I could do the same. For the policy net the input could be the current state and the output the state after the move. I wonder if this would work, as the state-space complexity for chess is 10¹²⁰. But it still "only" corresponds to one-hot classifying a (12, 8, 8) shape matrix = 768. I think that's where I'll start.
 
-#####Next steps:
+##### Next steps:
 1. Reformat the PGN format to shape (12, 8, 8) arrays input and output for both white and black
 2. Think about what the value net would look like
 
