@@ -16,16 +16,16 @@ importlib.reload(ut)
 
 INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
 
-states, legal_moves, fens = process_pgn(input_file=INPUT_FILE_PATH, n_games_to_get=20)
+states, legal_moves, fens = process_pgn(input_file=INPUT_FILE_PATH, n_games_to_get=200)
 
 
 #%%
 
 
 def preprocess_legal_move_data(games_states: List[np.ndarray], games_legal_moves: LegalMovesT,
-                               games_fens: FensT
+                               games_fens: FensT, n_moves: int = 4032
                                ) -> Tuple[np.ndarray, np.ndarray, List[str]]:
-    """Extracts tuples with arrays of training points."""
+    """Extracts tuples with arrays of training points. Y is multilabel"""
     out_data_x = []
     out_data_y = []
     out_data_fen = []
@@ -33,11 +33,12 @@ def preprocess_legal_move_data(games_states: List[np.ndarray], games_legal_moves
                                                                   games_fens))):
 
         for state, state_legal_moves, state_fen in zip(game_states, game_legal_moves, game_fens):
+            # Convert y to multihot vector
+            multihot_y = np.bincount(state_legal_moves, minlength=n_moves)
 
-            for legal_move in state_legal_moves:
-                out_data_x.append(state)
-                out_data_y.append(legal_move)
-                out_data_fen.append(state_fen)
+            out_data_x.append(state)
+            out_data_y.append(multihot_y)
+            out_data_fen.append(state_fen)
 
     return np.array(out_data_x), np.array(out_data_y), out_data_fen
 
@@ -74,7 +75,7 @@ def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
                                                         games_legal_moves=val_legal_moves,
                                                         games_fens=val_fens)
 
-    make_sample_pickle = False
+    make_sample_pickle = True
     if make_sample_pickle:
         joblib.dump(val_x, "./tmp_val_x")
         joblib.dump(val_y, "./tmp_val_y")
@@ -106,7 +107,7 @@ def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
             raise Exception
 
 
-fit_batches(all_states=states, all_legal_moves=legal_moves, all_fens=fens, batch_size=5)
+fit_batches(all_states=states, all_legal_moves=legal_moves, all_fens=fens, batch_size=200)
 
 # Todo:
 #  Implement Net.
