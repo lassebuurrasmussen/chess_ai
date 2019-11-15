@@ -80,7 +80,7 @@ def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
         joblib.dump(val_y, "./tmp_val_y")
         joblib.dump(val_fens, "./tmp_val_fens")
 
-    idx_train_games_shuffled = random.sample(idx_train_games, len(idx_train_games))
+    idx_train_games_shuffled = random.sample(range(len(train_states)), len(train_states))
     for batch_i in range(0, len(idx_train_games), batch_size):
         batch_idxs = idx_train_games_shuffled[batch_i:batch_i + batch_size]
 
