@@ -61,6 +61,6 @@ https://chesstempo.com/pgn-viewer.html
 
 _Nov 15 - 19_\
 First results in! After fiddling around with creating my own network architecture that I couldn't really get to work, I decided to use resnet18, since this is a proven-to-work architecture (at least for images). I simply copied it from Pytorch github and adapted it to my input and output. Furthermore, I realized that I was using CrossEntropyLoss, which apparently applies softmax on it's own, meaning that'd I'd been putting my outputs through softmax twice.\
-Still the results didn't really look that promising. This was until I converted the problem into a multilabel one and things started going better!
+Still the results didn't really look that promising. This was until I converted the problem into a multilabel one and things started going better!\
 ![](results14novloss.png)\
 Here the loss is shown for 16102 tranining samples and 923 validation samples. This is still only a tiny fraction of the games available, and it has only been trained for 10ish minutes on my own laptop CPU. In terms of accuracy I got correct train=0.247 correct test=0.174, which is the fraction of data points where the top 10 predictions are all legal moves. I think this looks very promising, especially taking into account the vast amount of illegal moves, how little data I've used so far (about 200 of my 2.2 million games) and that I've only trained for 10 minutes on an older laptop CPU. Stay tuned for more!
