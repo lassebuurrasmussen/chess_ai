@@ -1,12 +1,12 @@
-import chess
+from collections import defaultdict
+
 import joblib
 import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
-# noinspection PyPep8Naming
 from tqdm import tqdm
 
-import utility_module as ut
 from resnet_module import ResNet, BasicBlock
 
 
@@ -34,8 +34,8 @@ def run_epoch(batch_x: torch.Tensor, batch_y: torch.Tensor, optimizer, criterion
                 evaluate(in_net=net, in_val_x=val_X, in_val_y=val_y, criterion=criterion,
                          val_losses=val_losses, time_steps=time_steps)
 
-                print(
-                    f"train loss: {train_loss:.3f}, val loss: {list(val_losses.values())[-1]:.3f}")
+                print(f"train loss: {train_loss:.3f}"
+                      f", val loss: {list(val_losses.values())[-1]:.3f}")
 
 
 def evaluate(in_net, in_val_x, in_val_y, criterion, val_losses, time_steps):
@@ -52,8 +52,11 @@ def evaluate(in_net, in_val_x, in_val_y, criterion, val_losses, time_steps):
 def fit(batch_x, batch_y, batch_size, n_epochs, lr):
     model: ResNet = ResNet(block=BasicBlock, layers=[2, 2, 2, 2], num_classes=4032)
     model.float()
+    model.train()
+    model.cpu()
     optimizer: torch.optim.Adam = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.CrossEntropyLoss()
+    # criterion = nn.CrossEntropyLoss()
+    criterion = nn.BCEWithLogitsLoss()
 
     losses = []
     val_losses = {}
@@ -63,61 +66,76 @@ def fit(batch_x, batch_y, batch_size, n_epochs, lr):
                   batch_size=batch_size, losses=losses, time_steps=time_steps,
                   val_losses=val_losses)
 
-        # if not epoch % 10:
+        # evaluate(in_net=model, in_val_x=val_X, in_val_y=val_y, criterion=criterion,
+        #          val_losses=val_losses, time_steps=time_steps)
+
+        # print(f"train loss: {losses[-1]:.3f}"
+        #       f", val loss: {list(val_losses.values())[-1]:.3f}")
 
     return model, losses, time_steps, val_losses
 
 
-dp_slicer = slice(10_000)  # N data points to use
+dp_slicer = slice(100_000)  # N data points to use
 N_EPOCHS = 2
 LR = 1e-3
 BATCH_SIZE = 128
 
 # Load a teporarily saved sample data
 X = torch.tensor(joblib.load("./tmp_batch_x")).float()[dp_slicer]
-y = torch.tensor(joblib.load("./tmp_batch_y"))[dp_slicer]
+y = torch.tensor(joblib.load("./tmp_batch_y"))[dp_slicer].float()
 fens = joblib.load("./tmp_batch_fens")[dp_slicer]
 
 val_X = torch.tensor(joblib.load("./tmp_val_x")).float()
-val_y = torch.tensor(joblib.load("./tmp_val_y"))
+val_y = torch.tensor(joblib.load("./tmp_val_y")).float()
 val_fens = joblib.load("./tmp_val_fens")
 
+print(X.shape[0], val_X.shape[0])
 legal_moves_net, train_losses, ts, val_l = fit(batch_x=X, batch_y=y, batch_size=BATCH_SIZE,
                                                n_epochs=N_EPOCHS, lr=LR)
 
 # Plot loss over time
 plt.plot(ts[1:], train_losses)
 plt.plot(*list(zip(*val_l.items())))
+plt.ylim(min(train_losses) * 0.8, 0.04)  # Zoom in on where the action's at
 plt.show()
 
 legal_moves_net: ResNet
 legal_moves_net.eval()
-# Evaluate accuracy and correctness
-preds = legal_moves_net(X).argmax(1)
-accuracy = (preds == y).int().float().mean()
 
-preds_val = legal_moves_net(val_X).argmax(1)
-accuracy_val = (preds_val == val_y).int().float().mean()
 
-correct = 0
-for i, fen in enumerate(fens):
-    if preds[i] in [ut.uci2onehot_idx(str(uci)) for uci in chess.Board(fen).legal_moves]:
-        correct += 1
+def calculte_correct(in_x, in_y, n_top):
+    # Evaluate accuracy and correctness
+    preds: torch.Tensor = legal_moves_net(in_x).sigmoid()
 
-correct_val = 0
-for i, fen in enumerate(val_fens):
-    if preds_val[i] in [ut.uci2onehot_idx(str(uci)) for uci in chess.Board(fen).legal_moves]:
-        correct_val += 1
+    y_densed = defaultdict(list)
+    for i_ in np.stack(np.where(in_y), axis=1):
+        y_densed[i_[0]].append(i_[1])
 
-print(f"Train accuracy: {accuracy:.3f}")
-print(f"Train prediction correct ratio: {correct / len(fens):.3f}")
+    preds_topx = preds.sort(dim=1)[1][:, -n_top:]
 
-print(f"Test accuracy: {accuracy_val:.3f}")
-print(f"Test prediction correct ratio: {correct_val / len(val_fens):.3f}")
+    score = 0
+    for i_, topx in enumerate(preds_topx):
+        if all([t in y_densed[i_] for t in topx]):
+            score += 1
+    return score / in_x.shape[0]
+
+
+print("Correct train: ", calculte_correct(X, y, 10))
+print("Correct test: ", calculte_correct(val_X, val_y, 10))
+
+# Plot output vs actual labels for a single point
+i = np.random.randint(0, val_X.shape[0])
+est = legal_moves_net(X[i:i + 1]).sigmoid().detach().numpy().flatten()
+a = np.zeros(4032)
+a[np.where(y[i])[0]] = est.max()
+
+plt.close('all')
+plt.plot(np.arange(len(a)), a)
+plt.plot(np.arange(4032), est)
+plt.show()
 
 # todo
 #  - Check if evaluation function works properly
 #  - Check top 5, 10, 15 outputs and see if they're in legal moves
 #  - Consider using fastai library
 #  - Set it up so that it can train on (almost?) all of the available games
-#  - Conver to multi label exercise to avoid correct guesses being punished
