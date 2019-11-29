@@ -158,7 +158,6 @@ plt.plot(np.arange(4032), est)
 plt.show()
 
 # todo
-#  - Check if evaluation function works properly
 #  - Check top 5, 10, 15 outputs and see if they're in legal moves
 #  - Consider using fastai library
 #  - Set it up so that it can train on (almost?) all of the available games
