@@ -1,3 +1,4 @@
+import os
 from collections import defaultdict
 from os import PathLike
 from pathlib import Path
@@ -19,8 +20,10 @@ class NetTrainer:
     Class to handle the training of our neural nets
     """
 
-    def __init__(self, num_classes: int, loss_function=nn.BCEWithLogitsLoss) -> None:
+    def __init__(self, num_classes: int, loss_function=nn.BCEWithLogitsLoss,
+                 log_path: Optional[Union[Path, PathLike]] = None) -> None:
         self.num_classes = num_classes
+        self.log_path = log_path
 
         self.net: ResNet = self.initialize_model()
         self.criterion = loss_function()
@@ -28,6 +31,7 @@ class NetTrainer:
         self.time_steps = []
         self.losses = []
         self.val_losses = {}
+        self.create_log_file()
 
     def initialize_model(self) -> ResNet:
         model: nn.Module = ResNet(block=BasicBlock, layers=[2, 2, 2, 2],
@@ -38,8 +42,7 @@ class NetTrainer:
 
         return model
 
-    def evaluate(self, x: torch.Tensor, y: torch.Tensor, is_train_set=True,
-                 add_to_log: bool = False) -> None:
+    def evaluate(self, x: torch.Tensor, y: torch.Tensor, is_train_set=True) -> None:
         """Expects to be run within 'with torch.no_grad()'"""
         self.net.eval()
 
@@ -73,18 +76,19 @@ class NetTrainer:
             with torch.no_grad():
                 optimizer.step()
 
-                if not minibatch_i % evaluate_train_every:
+                if not minibatch_i % evaluate_train_every and minibatch_i != 0:
                     self.evaluate(x=x, y=y)
 
                 if evaluate_val_every:
-                    if not minibatch_i % evaluate_val_every:
+                    if not minibatch_i % evaluate_val_every and minibatch_i != 0:
                         self.evaluate(x=x_val, y=y_val, is_train_set=False)
 
             self.time_step += 1
 
     def fit(self, x: torch.Tensor, y: torch.Tensor, batch_size: int, n_epochs: int, lr: float,
             x_val: torch.Tensor, y_val: torch.Tensor, optimizer=torch.optim.Adam,
-            evaluate_each_epoch=True, evaluate_train_every: int = 10, evaluate_val_every: int = 0
+            evaluate_val_each_epoch: bool = True, evaluate_train_each_epoch: bool = True,
+            evaluate_train_every: int = 10, evaluate_val_every: int = 0
             ) -> None:
 
         optimizer: torch.optim.Adam = optimizer(self.net.parameters(), lr=lr)
@@ -99,8 +103,41 @@ class NetTrainer:
                            evaluate_train_every=evaluate_train_every,
                            evaluate_val_every=evaluate_val_every)
 
-            if evaluate_each_epoch:
+            if evaluate_train_each_epoch:
+                self.evaluate(x=x, y=y)
+            if evaluate_val_each_epoch:
                 self.evaluate(x=x_val, y=y_val, is_train_set=False)
+
+            self.update_log_file()
+
+    def create_log_file(self) -> None:
+        assert not self.log_path.exists(), f"Log '{self.log_path.name}' already exists!"
+        self.log_path.touch()
+        self.log_path.write_text("time_step,loss,type\n")
+
+    def append_to_log_file(self, time_steps: List[int], losses: List[float],
+                           loss_type: str) -> None:
+        output_str = ("\n".join([f"{time_step},{loss},{loss_type}"
+                                 for time_step, loss in zip(time_steps, losses)]))
+
+        with open(self.log_path, 'a') as log_file:
+            log_file.write(output_str + "\n")
+
+    def update_log_file(self) -> None:
+        """
+        Appends latest training results to log file and clears loss variables
+        """
+        time_steps_recent_train = self.time_steps[-len(self.losses):]
+        time_steps_recent_val, val_losses = zip(*self.val_losses.items())
+
+        self.append_to_log_file(
+            time_steps=time_steps_recent_train, losses=self.losses, loss_type='train')
+        self.append_to_log_file(
+            time_steps=time_steps_recent_val, losses=val_losses, loss_type='val')
+
+        # Clear loss containers
+        self.losses = []
+        self.val_losses = {}
 
     def export_training_results(self, train_save_path: PathLike, val_save_path: PathLike) -> None:
         """
@@ -114,7 +151,7 @@ class NetTrainer:
 
 
 dp_slicer = slice(100)  # N data points to use
-N_EPOCHS = 2
+N_EPOCHS = 10
 LR = 1e-3
 BATCH_SIZE = 128
 
@@ -128,14 +165,11 @@ Y_val = torch.tensor(joblib.load("./tmp_val_y")).float()
 val_fens = joblib.load("./tmp_val_fens")
 
 print(X.shape[0], X_val.shape[0])
-trainer = NetTrainer(num_classes=4032)
+os.remove('test_test.log')
+trainer = NetTrainer(num_classes=4032, log_path=Path('test_test.log'))
 trainer.fit(x=X, y=Y, batch_size=BATCH_SIZE, n_epochs=N_EPOCHS, lr=LR, x_val=X_val, y_val=Y_val)
 
-# Plot loss over time
-plt.plot(trainer.time_steps, trainer.losses)
-plt.plot(*list(zip(*trainer.val_losses.items())))
-plt.ylim(min(trainer.losses) * 0.8, 0.04)  # Zoom in on where the action's at
-plt.show()
+#%%
 
 legal_moves_net: ResNet
 legal_moves_net.eval()
@@ -176,3 +210,4 @@ plt.show()
 #  - Check top 5, 10, 15 outputs and see if they're in legal moves
 #  - Consider using fastai library
 #  - Set it up so that it can train on (almost?) all of the available games
+#  - Make plotting module
