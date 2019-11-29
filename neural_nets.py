@@ -44,6 +44,7 @@ class NetTrainer:
         print(f", val loss: {list(self.val_losses.values())[-1]:.3f}")
 
     def evaluate_on_train(self, x: torch.Tensor, y: torch.Tensor) -> None:
+        """Expects to be run within 'with torch.no_grad()'"""
         train_loss = self.criterion(self.net(x), y)
         self.losses.append(train_loss)
         self.time_steps.append(self.time_step)
