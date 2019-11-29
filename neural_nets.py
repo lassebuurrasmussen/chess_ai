@@ -2,7 +2,7 @@ import os
 from collections import defaultdict
 from os import PathLike
 from pathlib import Path
-from typing import Optional, Union, List
+from typing import List, Callable, Dict
 
 import joblib
 import matplotlib.pyplot as plt
@@ -20,22 +20,22 @@ class NetTrainer:
     Class to handle the training of our neural nets
     """
 
-    def __init__(self, num_classes: int, loss_function=nn.BCEWithLogitsLoss,
-                 log_path: Optional[Union[Path, PathLike]] = None) -> None:
+    def __init__(self, num_classes: int, log_path: Path, loss_function=nn.BCEWithLogitsLoss
+                 ) -> None:
         self.num_classes = num_classes
         self.log_path = log_path
 
         self.net: ResNet = self.initialize_model()
-        self.criterion = loss_function()
-        self.time_step = 0
-        self.time_steps = []
-        self.losses = []
-        self.val_losses = {}
+        self.criterion: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = loss_function()
+        self.time_step: int = 0
+        self.time_steps: List[int] = []
+        self.losses: List[float] = []
+        self.val_losses: Dict[int, float] = {}
         self.create_log_file()
 
     def initialize_model(self) -> ResNet:
-        model: nn.Module = ResNet(block=BasicBlock, layers=[2, 2, 2, 2],
-                                  num_classes=self.num_classes)
+        model: ResNet = ResNet(block=BasicBlock, layers=[2, 2, 2, 2],
+                               num_classes=self.num_classes)
         model.float()
         model.train()
         model.cpu()
@@ -91,7 +91,7 @@ class NetTrainer:
             evaluate_train_every: int = 10, evaluate_val_every: int = 0
             ) -> None:
 
-        optimizer: torch.optim.Adam = optimizer(self.net.parameters(), lr=lr)
+        optimizer = optimizer(self.net.parameters(), lr=lr)
 
         self.time_step = 0
         self.losses = []
@@ -120,7 +120,7 @@ class NetTrainer:
         output_str = ("\n".join([f"{time_step},{loss},{loss_type}"
                                  for time_step, loss in zip(time_steps, losses)]))
 
-        with open(self.log_path, 'a') as log_file:
+        with open(str(self.log_path), 'a') as log_file:
             log_file.write(output_str + "\n")
 
     def update_log_file(self) -> None:
