@@ -10,72 +10,94 @@ from tqdm import tqdm
 from resnet_module import ResNet, BasicBlock
 
 
-def run_epoch(batch_x: torch.Tensor, batch_y: torch.Tensor, optimizer, criterion, net, batch_size,
-              losses, time_steps, val_losses):
-    start_idxs = range(0, batch_x.shape[0], batch_size)
-    for minibatch_i, start_idx in tqdm(list(enumerate(start_idxs))):
-        optimizer.zero_grad()
+class NetTrainer:
 
-        slicer = slice(start_idx, start_idx + batch_size)
+    def __init__(self, num_classes: int, loss_function=nn.BCEWithLogitsLoss) -> None:
+        self.num_classes = num_classes
 
-        output = net(batch_x[slicer])
+        self.net: ResNet = self.initialize_model()
+        self.criterion = loss_function()
+        self.time_step = 0
+        self.time_steps = []
+        self.losses = []
+        self.val_losses = {}
 
-        loss = criterion(output, batch_y[slicer])
-        loss.backward()
+    def initialize_model(self) -> ResNet:
+        model: nn.Module = ResNet(block=BasicBlock, layers=[2, 2, 2, 2],
+                                  num_classes=self.num_classes)
+        model.float()
+        model.train()
+        model.cpu()
 
-        with torch.no_grad():
-            optimizer.step()
+        return model
 
-            if not minibatch_i % 10:
-                train_loss = criterion(net(batch_x), batch_y)
-                losses.append(train_loss)
-                time_steps.append(minibatch_i + 1 + time_steps[-1])
+    def evaluate_on_val(self, x_val: torch.Tensor, y_val: torch.Tensor) -> None:
+        """Expects to be run within 'with torch.no_grad()'"""
+        self.net.eval()
 
-                evaluate(in_net=net, in_val_x=val_X, in_val_y=val_y, criterion=criterion,
-                         val_losses=val_losses, time_steps=time_steps)
+        self.net(x_val)
+        val_loss = self.criterion(self.net(x_val), y_val)
+        self.val_losses[self.time_step] = val_loss
 
-                print(f"train loss: {train_loss:.3f}"
-                      f", val loss: {list(val_losses.values())[-1]:.3f}")
+        self.net.train()
+
+        print(f", val loss: {list(self.val_losses.values())[-1]:.3f}")
+
+    def evaluate_on_train(self, x: torch.Tensor, y: torch.Tensor) -> None:
+        train_loss = self.criterion(self.net(x), y)
+        self.losses.append(train_loss)
+        self.time_steps.append(self.time_step)
+        print(f"train loss: {train_loss:.3f}")
+
+    def run_epoch(self, x: torch.Tensor, y: torch.Tensor, x_val: torch.Tensor, y_val: torch.Tensor,
+                  optimizer, batch_size: int, evaluate_train_every: int, evaluate_val_every: int
+                  ) -> None:
+        start_idxs = range(0, x.shape[0], batch_size)
+        for minibatch_i, start_idx in tqdm(list(enumerate(start_idxs))):
+
+            optimizer.zero_grad()
+
+            slicer = slice(start_idx, start_idx + batch_size)
+
+            output = self.net(x[slicer])
+
+            loss = self.criterion(output, y[slicer])
+            loss.backward()
+
+            with torch.no_grad():
+                optimizer.step()
+
+                if not minibatch_i % evaluate_train_every:
+                    self.evaluate_on_train(x=x, y=y)
+
+                if evaluate_val_every:
+                    if not minibatch_i % evaluate_val_every:
+                        self.evaluate_on_val(x_val=x_val, y_val=y_val)
+
+            self.time_step += 1
+
+    def fit(self, x: torch.Tensor, y: torch.Tensor, batch_size: int, n_epochs: int, lr: float,
+            x_val: torch.Tensor, y_val: torch.Tensor, optimizer=torch.optim.Adam,
+            evaluate_each_epoch=True, evaluate_train_every: int = 10, evaluate_val_every: int = 0
+            ) -> None:
+
+        optimizer: torch.optim.Adam = optimizer(self.net.parameters(), lr=lr)
+
+        self.time_step = 0
+        self.losses = []
+        self.val_losses = {}
+        self.time_steps = []
+
+        for _ in range(n_epochs):
+            self.run_epoch(x, y, x_val, y_val, batch_size=batch_size, optimizer=optimizer,
+                           evaluate_train_every=evaluate_train_every,
+                           evaluate_val_every=evaluate_val_every)
+
+            if evaluate_each_epoch:
+                self.evaluate_on_val(x_val=x_val, y_val=y_val)
 
 
-def evaluate(in_net, in_val_x, in_val_y, criterion, val_losses, time_steps):
-    in_net.eval()
-
-    with torch.no_grad():
-        in_net(in_val_x)
-        val_loss = criterion(in_net(in_val_x), in_val_y)
-        val_losses[time_steps[-1]] = val_loss
-
-    in_net.train()
-
-
-def fit(batch_x, batch_y, batch_size, n_epochs, lr):
-    model: ResNet = ResNet(block=BasicBlock, layers=[2, 2, 2, 2], num_classes=4032)
-    model.float()
-    model.train()
-    model.cpu()
-    optimizer: torch.optim.Adam = torch.optim.Adam(model.parameters(), lr=lr)
-    # criterion = nn.CrossEntropyLoss()
-    criterion = nn.BCEWithLogitsLoss()
-
-    losses = []
-    val_losses = {}
-    time_steps = [0]
-    for _ in range(n_epochs):
-        run_epoch(batch_x, batch_y, optimizer=optimizer, criterion=criterion, net=model,
-                  batch_size=batch_size, losses=losses, time_steps=time_steps,
-                  val_losses=val_losses)
-
-        # evaluate(in_net=model, in_val_x=val_X, in_val_y=val_y, criterion=criterion,
-        #          val_losses=val_losses, time_steps=time_steps)
-
-        # print(f"train loss: {losses[-1]:.3f}"
-        #       f", val loss: {list(val_losses.values())[-1]:.3f}")
-
-    return model, losses, time_steps, val_losses
-
-
-dp_slicer = slice(100_000)  # N data points to use
+dp_slicer = slice(5_000)  # N data points to use
 N_EPOCHS = 2
 LR = 1e-3
 BATCH_SIZE = 128
@@ -85,18 +107,18 @@ X = torch.tensor(joblib.load("./tmp_batch_x")).float()[dp_slicer]
 y = torch.tensor(joblib.load("./tmp_batch_y"))[dp_slicer].float()
 fens = joblib.load("./tmp_batch_fens")[dp_slicer]
 
-val_X = torch.tensor(joblib.load("./tmp_val_x")).float()
-val_y = torch.tensor(joblib.load("./tmp_val_y")).float()
+X_val = torch.tensor(joblib.load("./tmp_val_x")).float()
+y_val = torch.tensor(joblib.load("./tmp_val_y")).float()
 val_fens = joblib.load("./tmp_val_fens")
 
-print(X.shape[0], val_X.shape[0])
-legal_moves_net, train_losses, ts, val_l = fit(batch_x=X, batch_y=y, batch_size=BATCH_SIZE,
-                                               n_epochs=N_EPOCHS, lr=LR)
+print(X.shape[0], X_val.shape[0])
+trainer = NetTrainer(num_classes=4032)
+trainer.fit(x=X, y=y, batch_size=BATCH_SIZE, n_epochs=N_EPOCHS, lr=LR, x_val=X_val, y_val=y_val)
 
 # Plot loss over time
-plt.plot(ts[1:], train_losses)
-plt.plot(*list(zip(*val_l.items())))
-plt.ylim(min(train_losses) * 0.8, 0.04)  # Zoom in on where the action's at
+plt.plot(trainer.time_steps, trainer.losses)
+plt.plot(*list(zip(*trainer.val_losses.items())))
+plt.ylim(min(trainer.losses) * 0.8, 0.04)  # Zoom in on where the action's at
 plt.show()
 
 legal_moves_net: ResNet
@@ -121,10 +143,10 @@ def calculte_correct(in_x, in_y, n_top):
 
 
 print("Correct train: ", calculte_correct(X, y, 10))
-print("Correct test: ", calculte_correct(val_X, val_y, 10))
+print("Correct test: ", calculte_correct(X_val, y_val, 10))
 
 # Plot output vs actual labels for a single point
-i = np.random.randint(0, val_X.shape[0])
+i = np.random.randint(0, X_val.shape[0])
 est = legal_moves_net(X[i:i + 1]).sigmoid().detach().numpy().flatten()
 a = np.zeros(4032)
 a[np.where(y[i])[0]] = est.max()
