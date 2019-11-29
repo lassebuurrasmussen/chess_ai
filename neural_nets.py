@@ -1,8 +1,12 @@
 from collections import defaultdict
+from os import PathLike
+from pathlib import Path
+from typing import Optional, Union, List
 
 import joblib
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from tqdm import tqdm
@@ -11,6 +15,9 @@ from resnet_module import ResNet, BasicBlock
 
 
 class NetTrainer:
+    """
+    Class to handle the training of our neural nets
+    """
 
     def __init__(self, num_classes: int, loss_function=nn.BCEWithLogitsLoss) -> None:
         self.num_classes = num_classes
@@ -31,20 +38,20 @@ class NetTrainer:
 
         return model
 
-    def evaluate(self, x: torch.Tensor, y: torch.Tensor, is_train_set=True) -> None:
+    def evaluate(self, x: torch.Tensor, y: torch.Tensor, is_train_set=True,
+                 add_to_log: bool = False) -> None:
         """Expects to be run within 'with torch.no_grad()'"""
         self.net.eval()
 
-        train_loss = self.criterion(self.net(x), y)
+        loss = self.criterion(self.net(x), y)
 
         if is_train_set:
-            self.losses.append(train_loss.item())
-            print(f"train loss: {train_loss:.3f}")
+            self.losses.append(loss.item())
+            print(f"train loss: {loss:.3f}")
             self.time_steps.append(self.time_step)
         else:
-            val_loss = self.criterion(self.net(x), y)
-            self.val_losses[self.time_step] = val_loss.item()
-            print(f"val loss: {val_loss:.3f}")
+            self.val_losses[self.time_step] = loss.item()
+            print(f"val loss: {loss:.3f}")
 
         self.net.train()
 
@@ -95,8 +102,18 @@ class NetTrainer:
             if evaluate_each_epoch:
                 self.evaluate(x=x_val, y=y_val, is_train_set=False)
 
+    def export_training_results(self, train_save_path: PathLike, val_save_path: PathLike) -> None:
+        """
+        Saves csv files with the training metrics
+        """
+        df_train_loss = pd.DataFrame(np.c_[self.time_steps, self.losses],
+                                     columns=['time_step', 'train_loss'])
+        df_val_loss = pd.DataFrame(self.val_losses.items())
 
-dp_slicer = slice(5_000)  # N data points to use
+        df_train_loss.to_csv(train_save_path), df_val_loss.to_csv(val_save_path)
+
+
+dp_slicer = slice(100)  # N data points to use
 N_EPOCHS = 2
 LR = 1e-3
 BATCH_SIZE = 128
