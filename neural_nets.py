@@ -38,11 +38,12 @@ class NetTrainer:
         train_loss = self.criterion(self.net(x), y)
 
         if is_train_set:
-            self.losses.append(train_loss)
+            self.losses.append(train_loss.item())
             print(f"train loss: {train_loss:.3f}")
             self.time_steps.append(self.time_step)
         else:
             val_loss = self.criterion(self.net(x), y)
+            self.val_losses[self.time_step] = val_loss.item()
             print(f"val loss: {val_loss:.3f}")
 
         self.net.train()
