@@ -31,24 +31,21 @@ class NetTrainer:
 
         return model
 
-    def evaluate_on_val(self, x_val: torch.Tensor, y_val: torch.Tensor) -> None:
+    def evaluate(self, x: torch.Tensor, y: torch.Tensor, is_train_set=True) -> None:
         """Expects to be run within 'with torch.no_grad()'"""
         self.net.eval()
 
-        self.net(x_val)
-        val_loss = self.criterion(self.net(x_val), y_val)
-        self.val_losses[self.time_step] = val_loss
+        train_loss = self.criterion(self.net(x), y)
+
+        if is_train_set:
+            self.losses.append(train_loss)
+            print(f"train loss: {train_loss:.3f}")
+            self.time_steps.append(self.time_step)
+        else:
+            val_loss = self.criterion(self.net(x), y)
+            print(f"val loss: {val_loss:.3f}")
 
         self.net.train()
-
-        print(f", val loss: {list(self.val_losses.values())[-1]:.3f}")
-
-    def evaluate_on_train(self, x: torch.Tensor, y: torch.Tensor) -> None:
-        """Expects to be run within 'with torch.no_grad()'"""
-        train_loss = self.criterion(self.net(x), y)
-        self.losses.append(train_loss)
-        self.time_steps.append(self.time_step)
-        print(f"train loss: {train_loss:.3f}")
 
     def run_epoch(self, x: torch.Tensor, y: torch.Tensor, x_val: torch.Tensor, y_val: torch.Tensor,
                   optimizer, batch_size: int, evaluate_train_every: int, evaluate_val_every: int
@@ -69,11 +66,11 @@ class NetTrainer:
                 optimizer.step()
 
                 if not minibatch_i % evaluate_train_every:
-                    self.evaluate_on_train(x=x, y=y)
+                    self.evaluate(x=x, y=y)
 
                 if evaluate_val_every:
                     if not minibatch_i % evaluate_val_every:
-                        self.evaluate_on_val(x_val=x_val, y_val=y_val)
+                        self.evaluate(x=x_val, y=y_val, is_train_set=False)
 
             self.time_step += 1
 
@@ -95,7 +92,7 @@ class NetTrainer:
                            evaluate_val_every=evaluate_val_every)
 
             if evaluate_each_epoch:
-                self.evaluate_on_val(x_val=x_val, y_val=y_val)
+                self.evaluate(x=x_val, y=y_val, is_train_set=False)
 
 
 dp_slicer = slice(5_000)  # N data points to use
@@ -105,16 +102,16 @@ BATCH_SIZE = 128
 
 # Load a teporarily saved sample data
 X = torch.tensor(joblib.load("./tmp_batch_x")).float()[dp_slicer]
-y = torch.tensor(joblib.load("./tmp_batch_y"))[dp_slicer].float()
+Y = torch.tensor(joblib.load("./tmp_batch_y"))[dp_slicer].float()
 fens = joblib.load("./tmp_batch_fens")[dp_slicer]
 
 X_val = torch.tensor(joblib.load("./tmp_val_x")).float()
-y_val = torch.tensor(joblib.load("./tmp_val_y")).float()
+Y_val = torch.tensor(joblib.load("./tmp_val_y")).float()
 val_fens = joblib.load("./tmp_val_fens")
 
 print(X.shape[0], X_val.shape[0])
 trainer = NetTrainer(num_classes=4032)
-trainer.fit(x=X, y=y, batch_size=BATCH_SIZE, n_epochs=N_EPOCHS, lr=LR, x_val=X_val, y_val=y_val)
+trainer.fit(x=X, y=Y, batch_size=BATCH_SIZE, n_epochs=N_EPOCHS, lr=LR, x_val=X_val, y_val=Y_val)
 
 # Plot loss over time
 plt.plot(trainer.time_steps, trainer.losses)
@@ -143,14 +140,14 @@ def calculte_correct(in_x, in_y, n_top):
     return score / in_x.shape[0]
 
 
-print("Correct train: ", calculte_correct(X, y, 10))
-print("Correct test: ", calculte_correct(X_val, y_val, 10))
+print("Correct train: ", calculte_correct(X, Y, 10))
+print("Correct test: ", calculte_correct(X_val, Y_val, 10))
 
 # Plot output vs actual labels for a single point
 i = np.random.randint(0, X_val.shape[0])
 est = legal_moves_net(X[i:i + 1]).sigmoid().detach().numpy().flatten()
 a = np.zeros(4032)
-a[np.where(y[i])[0]] = est.max()
+a[np.where(Y[i])[0]] = est.max()
 
 plt.close('all')
 plt.plot(np.arange(len(a)), a)
