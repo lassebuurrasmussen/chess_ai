@@ -115,8 +115,8 @@ class NetTrainer:
         self.log_path.touch()
         self.log_path.write_text("time_step,loss,type\n")
 
-    def append_to_log_file(self, time_steps: List[int], losses: List[float],
-                           loss_type: str) -> None:
+    def append_to_log_file(self, time_steps: List[int], losses: List[float], loss_type: str
+                           ) -> None:
         output_str = ("\n".join([f"{time_step},{loss},{loss_type}"
                                  for time_step, loss in zip(time_steps, losses)]))
 
@@ -125,7 +125,7 @@ class NetTrainer:
 
     def update_log_file(self) -> None:
         """
-        Appends latest training results to log file and clears loss variables
+        Appends latest training results to log file and clears loss variables.
         """
         time_steps_recent_train = self.time_steps[-len(self.losses):]
         time_steps_recent_val, val_losses = zip(*self.val_losses.items())
@@ -207,6 +207,7 @@ plt.plot(np.arange(4032), est)
 plt.show()
 
 # todo
+#  - integrate 'calculte_correct' into code
 #  - Check top 5, 10, 15 outputs and see if they're in legal moves
 #  - Consider using fastai library
 #  - Set it up so that it can train on (almost?) all of the available games
