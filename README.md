@@ -64,3 +64,7 @@ First results in! After fiddling around with creating my own network architectur
 Still the results didn't really look that promising. This was until I converted the problem into a multilabel one and things started going better!\
 ![](results14novloss.png)\
 Here the loss is shown for 16102 tranining samples and 923 validation samples. This is still only a tiny fraction of the games available, and it has only been trained for 10ish minutes on my own laptop CPU. In terms of accuracy I got correct train=0.247 correct test=0.174, which is the fraction of data points where the top 10 predictions are all legal moves. I think this looks very promising, especially taking into account the vast amount of illegal moves, how little data I've used so far (about 200 of my 2.2 million games) and that I've only trained for 10 minutes on an older laptop CPU. Stay tuned for more!
+
+## I need to remake the representation, because now the state does not represent whether or not castling is possible
+To learn more about castling see https://www.youtube.com/watch?v=4jXQyGaeUV8
+

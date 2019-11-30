@@ -2,3 +2,7 @@
 /game_data/
 __pycache__/
 /test_variables.py
+
+.mypy_cache/
+test_land.py
+
