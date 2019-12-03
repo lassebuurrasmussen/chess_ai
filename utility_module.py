@@ -12,6 +12,8 @@ from chess import SQUARES_180
 # noinspection PyUnresolvedReferences
 from useful_objects import ONEHOT_TEMPLATE_ARRAY
 
+SQUARES_180_ARRAY = np.array(SQUARES_180).reshape(8, 8)
+
 PIECES_WHITE = ['P', 'R', 'N', 'B', 'Q', 'K']
 
 PIECES_BLACK = list("".join(PIECES_WHITE).lower())
@@ -39,14 +41,14 @@ def count_games_from_pgn(input_file: PathLike) -> int:
     return len(re.findall("EventDate", file))
 
 
-def get_board_state(in_board: chess.Board) -> np.ndarray:
+def get_board_state(board: chess.Board) -> np.ndarray:
     """Function adapted from chess.Board.__str__() to generate a numpy array representing the board
     state"""
     # 6 pieces * 2 colors + 2 for en passant and castling. 8*8 fields of the board.
     builder = np.zeros([12 + 2, 8 * 8])
     for square in SQUARES_180:
 
-        piece = in_board.piece_at(square)
+        piece = board.piece_at(square)
 
         if piece:
             piece_int = PIECE_INT_LOOKUP[piece.symbol()]
@@ -54,15 +56,14 @@ def get_board_state(in_board: chess.Board) -> np.ndarray:
 
     builder = builder.reshape([14, 8, 8])
 
+    if board.has_legal_en_passant():
+        set_en_passant(board=board, builder=builder)
+
     # As the SQUARES_180 is flipped I need to flip it back
     builder = np.flip(builder, 1)
 
-    if in_board.has_legal_en_passant():
-        en_passant_coords = get_en_passant_coords(fen=in_board.fen())
-        builder[12, en_passant_coords[0], en_passant_coords[1]] = 1
-
-    if in_board.has_castling_rights(color=True) or in_board.has_castling_rights(color=False):
-        castling_ints = get_castling_ints(castling_fen=in_board.castling_shredder_fen())
+    if board.has_castling_rights(color=True) or board.has_castling_rights(color=False):
+        castling_ints = get_castling_ints(castling_fen=board.castling_shredder_fen())
         builder[13, 0, castling_ints] = 1
 
     return builder
@@ -230,3 +231,15 @@ def get_nonzero_dict(tensor: torch.Tensor) -> Dict[int, List[int]]:
         out_dict[row].append(val)
 
     return out_dict
+
+
+def set_en_passant(board: chess.Board, builder: np.ndarray) -> None:
+    """
+    Sets the en passant coordinates from the board in the builder array
+    """
+    # Look up en passant square in SQUARES_180 list
+    ep_square = SQUARES_180[board.ep_square]
+
+    en_passant_coords = np.where(SQUARES_180_ARRAY == ep_square)
+
+    builder[12, en_passant_coords[0], en_passant_coords[1]] = 1

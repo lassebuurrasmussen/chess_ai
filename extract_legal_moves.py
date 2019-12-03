@@ -35,7 +35,7 @@ def get_state_legal_moves(board: chess.Board) -> List[int]:
 
 def add_board_state_to_list(board: chess.Board, in_list: list) -> None:
     """Extracts state from board and appends to input list"""
-    state = ut.get_board_state(in_board=board)
+    state = ut.get_board_state(board=board)
     in_list.append(state)
 
 
