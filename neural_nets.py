@@ -1,18 +1,20 @@
+import importlib
 import os
-from collections import defaultdict
 from os import PathLike
 from pathlib import Path
 from typing import List, Callable, Dict
 
 import joblib
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
 from tqdm import tqdm
 
+import utility_module as ut
 from resnet_module import ResNet, BasicBlock
+
+importlib.reload(ut)
 
 
 class NetTrainer:
@@ -150,8 +152,8 @@ class NetTrainer:
         df_train_loss.to_csv(train_save_path), df_val_loss.to_csv(val_save_path)
 
 
-dp_slicer = slice(100)  # N data points to use
-N_EPOCHS = 10
+dp_slicer = slice(100_000)  # N data points to use
+N_EPOCHS = 2
 LR = 1e-3
 BATCH_SIZE = 128
 
@@ -171,44 +173,23 @@ trainer.fit(x=X, y=Y, batch_size=BATCH_SIZE, n_epochs=N_EPOCHS, lr=LR, x_val=X_v
 
 #%%
 
-legal_moves_net: ResNet
-legal_moves_net.eval()
+net = trainer.net
+net.eval()
+for p in net.parameters():
+    p.requires_grad_(False)
 
+# with torch.no_grad():
+preds: torch.Tensor = trainer.net(X).sigmoid()
+preds_val: torch.Tensor = trainer.net(X_val).sigmoid()
 
-def calculte_correct(in_x, in_y, n_top):
-    # Evaluate accuracy and correctness
-    preds: torch.Tensor = legal_moves_net(in_x).sigmoid()
+legal_moves = ut.get_nonzero_dict(Y)
+legal_moves_val = ut.get_nonzero_dict(Y_val)
 
-    y_densed = defaultdict(list)
-    for i_ in np.stack(np.where(in_y), axis=1):
-        y_densed[i_[0]].append(i_[1])
-
-    preds_topx = preds.sort(dim=1)[1][:, -n_top:]
-
-    score = 0
-    for i_, topx in enumerate(preds_topx):
-        if all([t in y_densed[i_] for t in topx]):
-            score += 1
-    return score / in_x.shape[0]
-
-
-print("Correct train: ", calculte_correct(X, Y, 10))
-print("Correct test: ", calculte_correct(X_val, Y_val, 10))
-
-# Plot output vs actual labels for a single point
-i = np.random.randint(0, X_val.shape[0])
-est = legal_moves_net(X[i:i + 1]).sigmoid().detach().numpy().flatten()
-a = np.zeros(4032)
-a[np.where(Y[i])[0]] = est.max()
-
-plt.close('all')
-plt.plot(np.arange(len(a)), a)
-plt.plot(np.arange(4032), est)
-plt.show()
+ut.get_guessing_score(predictions=preds, legal_moves=legal_moves)
+ut.get_guessing_score(predictions=preds_val, legal_moves=legal_moves_val)
 
 # todo
-#  - integrate 'calculte_correct' into code
-#  - Check top 5, 10, 15 outputs and see if they're in legal moves
+#  - integrate 'get_guessing_score' into code
 #  - Consider using fastai library
 #  - Set it up so that it can train on (almost?) all of the available games
 #  - Make plotting module
