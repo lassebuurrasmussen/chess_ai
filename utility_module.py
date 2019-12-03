@@ -1,4 +1,5 @@
 import re
+from collections import defaultdict
 from itertools import permutations
 from os import PathLike
 from typing import Tuple, List, Optional, Dict
@@ -223,12 +224,9 @@ def get_nonzero_dict(tensor: torch.Tensor) -> Dict[int, List[int]]:
     """
     Converts a tensor to a dictionary with lists of all indices of entries that are non-zero
     """
-    d = {}
+    out_dict = defaultdict(list)
     for row, val in tensor.nonzero(as_tuple=False):
         row, val = row.item(), val.item()
-        if row not in d.keys():
-            d[row] = [val]
-        else:
-            d[row].append(val)
+        out_dict[row].append(val)
 
-    return d
+    return out_dict
