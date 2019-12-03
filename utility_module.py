@@ -165,3 +165,12 @@ def get_en_passant_coords(fen: str) -> Optional[List[int]]:
     en_passant_coords[0] = 8 - en_passant_coords[0]
 
     return en_passant_coords
+
+
+def get_castling_ints(castling_fen: str) -> List[int]:
+    """
+    Returns integers corresponding to the 4 different castling rights
+    """
+
+    translater = {ord(l): ord(i) for l, i in zip('HAha', '0123')}
+    return [int(i) for i in castling_fen.translate(translater)]
