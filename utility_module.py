@@ -40,7 +40,8 @@ def count_games_from_pgn(input_file: PathLike) -> int:
 def get_board_state(in_board: chess.Board) -> np.ndarray:
     """Function adapted from chess.Board.__str__() to generate a numpy array representing the board
     state"""
-    builder = np.zeros([12, 8 * 8])
+    # 6 pieces * 2 colors + 2 for en passant and castling. 8*8 fields of the board.
+    builder = np.zeros([12 + 2, 8 * 8])
     for square in SQUARES_180:
 
         piece = in_board.piece_at(square)
@@ -49,10 +50,20 @@ def get_board_state(in_board: chess.Board) -> np.ndarray:
             piece_int = PIECE_INT_LOOKUP[piece.symbol()]
             builder[piece_int, square] = 1
 
-    builder = builder.reshape([12, 8, 8])
+    builder = builder.reshape([14, 8, 8])
 
     # As the SQUARES_180 is flipped I need to flip it back
-    return np.flip(builder, 1)
+    builder = np.flip(builder, 1)
+
+    if in_board.has_legal_en_passant():
+        en_passant_coords = get_en_passant_coords(fen=in_board.fen())
+        builder[12, en_passant_coords[0], en_passant_coords[1]] = 1
+
+    if in_board.has_castling_rights(color=True) or in_board.has_castling_rights(color=False):
+        castling_ints = get_castling_ints(castling_fen=in_board.castling_shredder_fen())
+        builder[13, 0, castling_ints] = 1
+
+    return builder
 
 
 def white_to_black(in_state: np.ndarray, single_state: bool = False) -> np.ndarray:
