@@ -3,13 +3,11 @@ import pathlib
 import random
 from typing import List, Tuple
 
-# import joblib
 import joblib
 import numpy as np
 from tqdm import tqdm
 
 import utility_module as ut
-# from neural_nets import Net
 from extract_legal_moves import process_pgn, LegalMovesT, FensT
 
 importlib.reload(ut)
