@@ -1,7 +1,7 @@
 import importlib
 import pathlib
 from os import PathLike
-from typing import List, Optional, Union, Tuple, TextIO
+from typing import List, Optional, Union, Tuple, TextIO, Set
 
 import chess
 import numpy as np
@@ -18,7 +18,7 @@ INPUT_FILE_PATH = pathlib.Path("game_data/KingBase2019-A00-A39.pgn")
 LegalMovesT = List[List[int]]
 FensT = List[List[str]]
 
-observed_states_set = set()
+observed_states_set: Set[str] = set()
 observed_states = []
 
 
@@ -55,13 +55,14 @@ def add_if_known(board: chess.Board, game_legal_moves: LegalMovesT,
 
 
 def get_single_games_states(game: chess.pgn.Game, return_legal_moves: bool
-                            ) -> Union[Tuple[List[np.ndarray], List[int]],
+                            ) -> Union[Tuple[List[np.ndarray], LegalMovesT],
                                        List[np.ndarray]]:
     """Create new chess.Board instance and plays game till the end. Returns list of array of all
     states along the way.
     Can also return list of legal moves per state"""
     board = Board()
-    game_states, game_legal_moves = [], []
+    game_states: List[np.ndarray] = []
+    game_legal_moves: LegalMovesT = []
     white_turn = True  # Keep track of who's turn it is
 
     for move_i, move in enumerate(game.mainline_moves()):
