@@ -1,7 +1,7 @@
 import re
 from itertools import permutations
 from os import PathLike
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 import chess
 import numpy as np
@@ -93,11 +93,18 @@ def coordinates_to_onehot_index(entry: Tuple[int, int]) -> int:
     return (entry[0]) * 63 + entry[1] - 1 + int(entry[0] > entry[1])
 
 
+def uci_translate(uci: str):
+    """
+    Translate UCI move to integers e.g. 'g' is has unicode 103 and is the index 6 column on the
+    # board. So g -> 6
+    """
+    return uci.translate(UCI_LETTER_LOOKUP)
+
+
 def uci2onehot_idx(uci: str) -> int:
     """Takes UCI move str and converts it to index of a onehot vector of all moves"""
-    # Translate UCI move to integers e.g. 'g' is has unicode 103 and is the index 6 column on the
-    # board. So g -> 6
-    move_translated = uci.translate(UCI_LETTER_LOOKUP)
+
+    move_translated = uci_translate(uci=uci)
 
     # Extract source and destination coordinates
     # swap axes as UCI is column first instead of row first
@@ -134,3 +141,27 @@ def split_list_as(in_list: List, template_list: List[List]) -> List[List]:
         total_length += game_length
 
     return splitted_list
+
+
+def get_en_passant_coords(fen: str) -> Optional[List[int]]:
+    """
+    Returns the coordinates of the en passant square if it exists
+    """
+    en_passant_field = fen.split()[3]
+
+    if en_passant_field == "-":
+        # fen contains "-" in fourth position and thereby no en passant
+        return None
+
+    en_passant_coords = uci_translate(uci=en_passant_field)
+
+    # Swap axes as UCI is column first instead of row first
+    en_passant_coords = en_passant_coords[::-1]
+
+    # Convert to ints
+    en_passant_coords = [int(en_passant_coords[0]), int(en_passant_coords[1])]
+
+    # Subtract each row index from 8 as UCI counts last row as first
+    en_passant_coords[0] = 8 - en_passant_coords[0]
+
+    return en_passant_coords
