@@ -67,4 +67,5 @@ Here the loss is shown for 16102 tranining samples and 923 validation samples. T
 
 #### I need to remake the representation, because now the state does not represent whether or not castling and "an passant" is possible
 To learn more about castling rules see https://www.youtube.com/watch?v=4jXQyGaeUV8\
+_2019-12-03_\
 **done**
