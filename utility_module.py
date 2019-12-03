@@ -1,10 +1,11 @@
 import re
 from itertools import permutations
 from os import PathLike
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Dict
 
 import chess
 import numpy as np
+import torch
 from chess import SQUARES_180
 
 # noinspection PyUnresolvedReferences
@@ -185,3 +186,49 @@ def get_castling_ints(castling_fen: str) -> List[int]:
 
     translater = {ord(l): ord(i) for l, i in zip('HAha', '0123')}
     return [int(i) for i in castling_fen.translate(translater)]
+
+
+def get_guessing_score(predictions: torch.Tensor, legal_moves: Dict[int, List[int]]) -> float:
+    """
+    Calculates a score in range 0-1 based on how many of the top guesses are needed to guess all the
+    legal moves of a state
+    """
+    # Argmax of predictions
+    predictions_sorted = predictions.sort(dim=1, descending=True)[1]
+
+    guesses, n_legal_moves_all = [], []
+    for row, board_legal_moves in legal_moves.items():
+        row_prediction = predictions_sorted[row]
+        correct_predictions = np.isin(row_prediction, board_legal_moves)
+
+        n_legal_moves = len(board_legal_moves)
+
+        # Count the number of guesses it takes to guess all the legal moves
+        cumulative_sum = correct_predictions.cumsum()
+        all_legal_moves_guessed = np.where(cumulative_sum == n_legal_moves)[0]
+
+        # Take the first integer where all the moves have been guessed and append
+        guesses.append(all_legal_moves_guessed[0])
+
+        # Save the number of legal moves for each row
+        n_legal_moves_all.append(n_legal_moves)
+
+    # Calculate the ratio between number of legal moves and guesses it took
+    scores = np.array(n_legal_moves_all) / (np.array(guesses) + 1)  # (+1 because of zero-indexing)
+
+    return scores.mean()
+
+
+def get_nonzero_dict(tensor: torch.Tensor) -> Dict[int, List[int]]:
+    """
+    Converts a tensor to a dictionary with lists of all indices of entries that are non-zero
+    """
+    d = {}
+    for row, val in tensor.nonzero(as_tuple=False):
+        row, val = row.item(), val.item()
+        if row not in d.keys():
+            d[row] = [val]
+        else:
+            d[row].append(val)
+
+    return d
