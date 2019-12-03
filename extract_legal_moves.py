@@ -43,7 +43,7 @@ def add_if_known(board: chess.Board, game_legal_moves: LegalMovesT,
                  game_states: List[np.ndarray]) -> None:
     """If board state hasn't already been observed: Adds state to set and list of observed states.
     Also adds legal moves and state corresponding to the Board."""
-    board_fen = board.board_fen()
+    board_fen = board.fen()
     if board_fen not in observed_states_set:
         observed_states_set.add(board_fen)
         observed_states.append(board_fen)
