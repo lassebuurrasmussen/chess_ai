@@ -43,11 +43,12 @@ def preprocess_legal_move_data(games_states: List[np.ndarray], games_legal_moves
     return np.array(out_data_x), np.array(out_data_y), out_data_fen
 
 
-def train_val_split(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
+def train_val_split(all_states: List[np.ndarray], all_legal_moves: LegalMovesT, all_fens,
                     frac_val_games: float = 0.05
                     ) -> Tuple[List[int], List[np.ndarray], LegalMovesT, List[np.ndarray],
-                               LegalMovesT]:
+                               LegalMovesT, List[List[str]], List[List[str]]]:
     """Splits games into training and validation games"""
+    random.seed(3947)
     n_games = len(states)
     n_games_val = int(n_games * frac_val_games)
     idx_val_games = random.sample(range(n_games), k=n_games_val)
@@ -59,27 +60,37 @@ def train_val_split(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
     val_states = [all_states[i] for i in range(n_games) if i in idx_val_games]
     val_legal_moves = [all_legal_moves[i] for i in range(n_games) if i in idx_val_games]
 
-    return idx_train_games, train_states, train_legal_moves, val_states, val_legal_moves
+    train_fens = [all_fens[i] for i in idx_train_games]
+    val_fens = [all_fens[i] for i in range(len(all_states)) if i not in idx_train_games]
+
+    return (idx_train_games, train_states, train_legal_moves, val_states, val_legal_moves,
+            train_fens, val_fens)
+
+
+def shuffle_batch(batch_x, batch_y, batch_fens):
+    batch_x_idx_shuffled = list(range(len(batch_x)))
+    random.shuffle(batch_x_idx_shuffled)
+    batch_x = batch_x[batch_x_idx_shuffled]
+    batch_y = batch_y[batch_x_idx_shuffled]
+    batch_fens = [batch_fens[i] for i in batch_x_idx_shuffled]
+
+    return batch_x, batch_y, batch_fens
 
 
 def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
-                all_fens: FensT, batch_size: int,
-                frac_val_games: float = 0.05):
-    random.seed(3947)
-    idx_train_games, train_states, train_legal_moves, val_states, val_legal_moves = train_val_split(
-        all_states=all_states, all_legal_moves=all_legal_moves, frac_val_games=frac_val_games)
-    train_fens = [all_fens[i] for i in idx_train_games]
-    val_fens = [all_fens[i] for i in range(len(all_states)) if i not in idx_train_games]
+                all_fens: FensT, batch_size: int, frac_val_games: float = 0.05,
+                make_sample_pickle: bool = True):
+    (idx_train_games, train_states, train_legal_moves, val_states, val_legal_moves,
+     train_fens, val_fens) = train_val_split(all_states=all_states, all_legal_moves=all_legal_moves,
+                                             all_fens=all_fens, frac_val_games=frac_val_games)
 
     val_x, val_y, val_fens = preprocess_legal_move_data(games_states=val_states,
                                                         games_legal_moves=val_legal_moves,
                                                         games_fens=val_fens)
 
-    make_sample_pickle = True
     if make_sample_pickle:
-        joblib.dump(val_x, "./tmp_val_x")
-        joblib.dump(val_y, "./tmp_val_y")
-        joblib.dump(val_fens, "./tmp_val_fens")
+        [joblib.dump(var, varname) for var, varname in
+         [(val_x, "./tmp_val_x"), (val_y, "./tmp_val_y"), (val_fens, "./tmp_val_fens")]]
 
     idx_train_games_shuffled = random.sample(range(len(train_states)), len(train_states))
     for batch_i in range(0, len(idx_train_games), batch_size):
@@ -93,17 +104,13 @@ def fit_batches(all_states: List[np.ndarray], all_legal_moves: LegalMovesT,
             games_states=batch_states, games_legal_moves=batch_legal_moves, games_fens=batch_fens)
 
         # Shuffle data
-        batch_x_idx_shuffled = list(range(len(batch_x)))
-        random.shuffle(batch_x_idx_shuffled)
-        batch_x = batch_x[batch_x_idx_shuffled]
-        batch_y = batch_y[batch_x_idx_shuffled]
-        batch_fens = [batch_fens[i] for i in batch_x_idx_shuffled]
+        batch_x, batch_y, batch_fens = shuffle_batch(batch_x=batch_x, batch_y=batch_y,
+                                                     batch_fens=batch_fens)
 
-        if batch_i == 0:
-            if make_sample_pickle:
-                joblib.dump(batch_x, "./tmp_batch_x")
-                joblib.dump(batch_y, "./tmp_batch_y")
-                joblib.dump(batch_fens, "./tmp_batch_fens")
+        if batch_i == 0 and make_sample_pickle:
+            [joblib.dump(var, varname) for var, varname in [(batch_x, "./tmp_batch_x"),
+                                                            (batch_y, "./tmp_batch_y"),
+                                                            (batch_fens, "./tmp_batch_fens")]]
             raise Exception
 
 
