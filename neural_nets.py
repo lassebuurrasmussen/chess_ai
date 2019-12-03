@@ -202,6 +202,8 @@ ut.get_guessing_score(predictions=preds_val, legal_moves=legal_moves_val)
 
 # todo
 #  - integrate 'get_guessing_score' into code
+#    - Make it possible to get guessing score for validation set
+#    - Do so that guessing score is saved to log
 #  - Consider using fastai library
 #  - Set it up so that it can train on (almost?) all of the available games
 #  - Make plotting module
