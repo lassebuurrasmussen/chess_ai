@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import List, Callable, Dict, Optional
 
 import joblib
-import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
@@ -15,6 +14,8 @@ import utility_module as ut
 from resnet_module import ResNet, BasicBlock
 
 importlib.reload(ut)
+
+Metric = Dict[int, float]
 
 
 class NetTrainer:
@@ -34,8 +35,13 @@ class NetTrainer:
         self.criterion: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = loss_function()
         self.time_step: int = 0
         self.time_steps: List[int] = []
-        self.losses: List[float] = []
-        self.val_losses: Dict[int, float] = {}
+
+        self.losses: Metric = {}
+        self.val_losses: Metric = {}
+
+        self.scores: Metric = {}
+        self.scores_val: Metric = {}
+
         self.create_log_file()
 
     def initialize_model(self) -> ResNet:
@@ -47,27 +53,38 @@ class NetTrainer:
 
         return model
 
+    def compute_and_save_guess_score(self, predictions, is_train_set):
+        legal_moves = self.legal_moves if is_train_set else self.legal_moves_val
+        guess_score = ut.get_guessing_score(predictions=predictions,
+                                            legal_moves=legal_moves)
+
+        score_list = self.scores if is_train_set else self.scores_val
+        score_list[self.time_step] = guess_score
+
+        return guess_score
+
     def evaluate(self, x: torch.Tensor, y: torch.Tensor, is_train_set=True,
-                 include_guess_score=False) -> None:
+                 compute_guess_score=False) -> None:
         """Expects to be run within 'with torch.no_grad()'"""
         self.net.eval()
+
+        type_str = "train" if is_train_set else "val"
 
         predictions = self.net(x)
         loss = self.criterion(predictions, y)
 
-        if is_train_set:
-            self.losses.append(loss.item())
-            print(f"train loss: {loss:.3f}")
-            self.time_steps.append(self.time_step)
+        print(f"{type_str} loss: {loss:.3f}")
 
-            if include_guess_score:
-                guess_score = ut.get_guessing_score(predictions=predictions,
-                                                    legal_moves=self.legal_moves)
-                print(f"train guess score: {guess_score:.3f}")
+        if compute_guess_score:
+            guess_score = self.compute_and_save_guess_score(
+                predictions=predictions, is_train_set=is_train_set)
+            print(f"{type_str} guess score: {guess_score:.3f}")
+
+        if is_train_set:
+            self.losses[self.time_step] = loss.item()
 
         else:
             self.val_losses[self.time_step] = loss.item()
-            print(f"val loss: {loss:.3f}")
 
         self.net.train()
 
@@ -90,13 +107,23 @@ class NetTrainer:
                 optimizer.step()
 
                 if not minibatch_i % evaluate_train_every and minibatch_i != 0:
-                    self.evaluate(x=x, y=y, include_guess_score=True)
+                    self.evaluate(x=x, y=y)
 
                 if evaluate_val_every:
                     if not minibatch_i % evaluate_val_every and minibatch_i != 0:
                         self.evaluate(x=x_val, y=y_val, is_train_set=False)
 
             self.time_step += 1
+
+    def reset_metrics(self):
+        self.time_step = 0
+        self.time_steps = []
+
+        self.losses = {}
+        self.val_losses = {}
+
+        self.scores = {}
+        self.scores_val = {}
 
     def fit(self, x: torch.Tensor, y: torch.Tensor, batch_size: int, n_epochs: int, lr: float,
             x_val: torch.Tensor, y_val: torch.Tensor, optimizer=torch.optim.Adam,
@@ -106,11 +133,9 @@ class NetTrainer:
 
         optimizer = optimizer(self.net.parameters(), lr=lr)
         self.legal_moves = ut.get_nonzero_dict(tensor=y)
+        self.legal_moves_val = ut.get_nonzero_dict(tensor=y_val)
 
-        self.time_step = 0
-        self.losses = []
-        self.val_losses = {}
-        self.time_steps = []
+        self.reset_metrics()
 
         for _ in range(n_epochs):
             self.run_epoch(x, y, x_val, y_val, batch_size=batch_size, optimizer=optimizer,
@@ -118,21 +143,22 @@ class NetTrainer:
                            evaluate_val_every=evaluate_val_every)
 
             if evaluate_train_each_epoch:
-                self.evaluate(x=x, y=y)
+                self.evaluate(x=x, y=y, compute_guess_score=True)
             if evaluate_val_each_epoch:
-                self.evaluate(x=x_val, y=y_val, is_train_set=False)
+                self.evaluate(x=x_val, y=y_val, is_train_set=False, compute_guess_score=True)
 
             self.update_log_file()
 
     def create_log_file(self) -> None:
         assert not self.log_path.exists(), f"Log '{self.log_path.name}' already exists!"
         self.log_path.touch()
-        self.log_path.write_text("time_step,loss,type\n")
+        self.log_path.write_text("time_step,value,type\n")
 
-    def append_to_log_file(self, time_steps: List[int], losses: List[float], loss_type: str
-                           ) -> None:
-        output_str = ("\n".join([f"{time_step},{loss},{loss_type}"
-                                 for time_step, loss in zip(time_steps, losses)]))
+    def append_to_log_file(self, metric_dict: Metric, value_type: str) -> None:
+        time_steps_recent, losses = zip(*metric_dict.items())
+
+        output_str = ("\n".join([f"{time_step},{loss},{value_type}"
+                                 for time_step, loss in zip(time_steps_recent, losses)]))
 
         with open(str(self.log_path), 'a') as log_file:
             log_file.write(output_str + "\n")
@@ -141,24 +167,21 @@ class NetTrainer:
         """
         Appends latest training results to log file and clears loss variables.
         """
-        time_steps_recent_train = self.time_steps[-len(self.losses):]
-        time_steps_recent_val, val_losses = zip(*self.val_losses.items())
 
-        self.append_to_log_file(
-            time_steps=time_steps_recent_train, losses=self.losses, loss_type='train')
-        self.append_to_log_file(
-            time_steps=time_steps_recent_val, losses=val_losses, loss_type='val')
+        metric_value_pairs = [(self.losses, 'train_loss'), (self.val_losses, 'val_loss'),
+                              (self.scores, 'train_score'), (self.scores_val, 'val_score')]
+
+        for metric_dict, value_type in metric_value_pairs:
+            self.append_to_log_file(metric_dict=metric_dict, value_type=value_type)
 
         # Clear loss containers
-        self.losses = []
-        self.val_losses = {}
+        self.losses, self.val_losses, self.scores, self.scores_val = {}, {}, {}, {}
 
     def export_training_results(self, train_save_path: PathLike, val_save_path: PathLike) -> None:
         """
         Saves csv files with the training metrics
         """
-        df_train_loss = pd.DataFrame(np.c_[self.time_steps, self.losses],
-                                     columns=['time_step', 'train_loss'])
+        df_train_loss = pd.DataFrame(self.losses.items())
         df_val_loss = pd.DataFrame(self.val_losses.items())
 
         df_train_loss.to_csv(train_save_path), df_val_loss.to_csv(val_save_path)
@@ -194,11 +217,11 @@ for p in net.parameters():
 preds: torch.Tensor = trainer.net(X).sigmoid()
 preds_val: torch.Tensor = trainer.net(X_val).sigmoid()
 
-legal_moves = ut.get_nonzero_dict(Y)
-legal_moves_val = ut.get_nonzero_dict(Y_val)
+leg_moves = ut.get_nonzero_dict(Y)
+leg_moves_val = ut.get_nonzero_dict(Y_val)
 
-ut.get_guessing_score(predictions=preds, legal_moves=legal_moves)
-ut.get_guessing_score(predictions=preds_val, legal_moves=legal_moves_val)
+ut.get_guessing_score(predictions=preds, legal_moves=leg_moves)
+ut.get_guessing_score(predictions=preds_val, legal_moves=leg_moves_val)
 
 # todo
 #  - integrate 'get_guessing_score' into code
