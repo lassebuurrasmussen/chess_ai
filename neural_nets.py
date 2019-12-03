@@ -2,7 +2,7 @@ import importlib
 import os
 from os import PathLike
 from pathlib import Path
-from typing import List, Callable, Dict
+from typing import List, Callable, Dict, Optional
 
 import joblib
 import numpy as np
@@ -27,6 +27,9 @@ class NetTrainer:
         self.num_classes = num_classes
         self.log_path = log_path
 
+        self.legal_moves: Optional[Dict[int, List[int]]] = None
+        self.legal_moves_val: Optional[Dict[int, List[int]]] = None
+
         self.net: ResNet = self.initialize_model()
         self.criterion: Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = loss_function()
         self.time_step: int = 0
@@ -44,16 +47,24 @@ class NetTrainer:
 
         return model
 
-    def evaluate(self, x: torch.Tensor, y: torch.Tensor, is_train_set=True) -> None:
+    def evaluate(self, x: torch.Tensor, y: torch.Tensor, is_train_set=True,
+                 include_guess_score=False) -> None:
         """Expects to be run within 'with torch.no_grad()'"""
         self.net.eval()
 
-        loss = self.criterion(self.net(x), y)
+        predictions = self.net(x)
+        loss = self.criterion(predictions, y)
 
         if is_train_set:
             self.losses.append(loss.item())
             print(f"train loss: {loss:.3f}")
             self.time_steps.append(self.time_step)
+
+            if include_guess_score:
+                guess_score = ut.get_guessing_score(predictions=predictions,
+                                                    legal_moves=self.legal_moves)
+                print(f"train guess score: {guess_score:.3f}")
+
         else:
             self.val_losses[self.time_step] = loss.item()
             print(f"val loss: {loss:.3f}")
@@ -79,7 +90,7 @@ class NetTrainer:
                 optimizer.step()
 
                 if not minibatch_i % evaluate_train_every and minibatch_i != 0:
-                    self.evaluate(x=x, y=y)
+                    self.evaluate(x=x, y=y, include_guess_score=True)
 
                 if evaluate_val_every:
                     if not minibatch_i % evaluate_val_every and minibatch_i != 0:
@@ -94,6 +105,7 @@ class NetTrainer:
             ) -> None:
 
         optimizer = optimizer(self.net.parameters(), lr=lr)
+        self.legal_moves = ut.get_nonzero_dict(tensor=y)
 
         self.time_step = 0
         self.losses = []
@@ -152,7 +164,7 @@ class NetTrainer:
         df_train_loss.to_csv(train_save_path), df_val_loss.to_csv(val_save_path)
 
 
-dp_slicer = slice(100_000)  # N data points to use
+dp_slicer = slice(10_000)  # N data points to use
 N_EPOCHS = 2
 LR = 1e-3
 BATCH_SIZE = 128
